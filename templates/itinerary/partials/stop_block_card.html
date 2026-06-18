@@ -1,0 +1,103 @@
+<div class="stop-block calendar-tile" 
+     id="stopBlock-{{ stop.id }}" 
+     data-stop-id="{{ stop.id }}" 
+     data-lat="{{ stop.latitude }}" 
+     data-lng="{{ stop.longitude }}" 
+     data-zoom="{{ stop.zoom_level }}" 
+     data-color="{{ stop.color_hex }}"
+     data-stop-idx="{{ index }}"
+     x-data="stopCalendarTile({{ stop.id }}, {{ stop.calendar_top }}, {{ stop.calendar_height }}, '{{ stop.start_time_of_day|time:'H:i' }}', '{{ stop.end_time_of_day|time:'H:i' }}')"
+     :style="'position: absolute; left: 12px; right: 12px; top: ' + topPx + 'px; height: ' + heightPx + 'px; border-left: 4px solid {{ stop.color_hex }}; background: #FFFFFF; padding: 10px 14px; box-sizing: border-box;'"
+     :class="[dragOver ? 'drag-over' : '']"
+     @mousedown="startDrag($event)"
+     @touchstart="startDrag($event)"
+     @dragover.prevent="dragOver = true"
+     @dragleave.prevent="dragOver = false"
+     @drop.prevent="handleDrop($event)"
+     style="position: absolute; left: 12px; right: 12px; top: {{ stop.calendar_top }}px; height: {{ stop.calendar_height }}px; border-left: 4px solid {{ stop.color_hex }}; overflow: visible; z-index: 10; padding: 10px 14px; background: #FFFFFF; box-sizing: border-box;">
+
+    <!-- Drag Handle Bar / Top indicator -->
+    <div style="position: absolute; top: 2px; left: 50%; transform: translateX(-50%); display: flex; gap: 2px; pointer-events: none; opacity: 0.4;">
+        <span style="width: 3px; height: 3px; background: #64748B; border-radius: 50%;"></span>
+        <span style="width: 3px; height: 3px; background: #64748B; border-radius: 50%;"></span>
+        <span style="width: 3px; height: 3px; background: #64748B; border-radius: 50%;"></span>
+    </div>
+
+    <!-- Header Area -->
+    <div class="stop-header" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+        <div style="display: flex; gap: 8px; align-items: flex-start; flex-grow: 1; min-width: 0;">
+            <div class="stop-num {% if index == 0 %}home{% endif %}" style="background: {{ stop.color_hex }}; flex-shrink: 0; width: 22px; height: 22px; font-size: 0.78rem;">
+                {% if index == 0 %}🏠{% else %}{{ index|add:1 }}{% endif %}
+            </div>
+            <div style="min-width: 0; flex-grow: 1;">
+                <div class="stop-time" style="font-size: 0.72rem; color: var(--color-text-secondary); font-weight: 700; margin-bottom: 2px; display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <span class="stop-time-text">{{ stop.time_label }}</span>
+                    <span style="display: flex; gap: 6px; pointer-events: auto;">
+                        <span style="cursor: pointer; color: var(--color-teal);" class="edit-btn"
+                              hx-get="{% url 'edit_stop' stop.id %}?index={{ index }}" hx-target="#stopBlock-{{ stop.id }}" hx-swap="outerHTML">✏️</span>
+                        <span style="cursor: pointer; color: #DC2626;" class="delete-btn"
+                              hx-post="{% url 'delete_stop' stop.id %}" hx-confirm="Are you sure you want to delete this stop?" hx-target="#stopBlock-{{ stop.id }}" hx-swap="delete">🗑️</span>
+                    </span>
+                </div>
+                <div class="stop-title" style="font-size: 0.85rem; font-weight: 700; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ stop.title }}</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scrollable container for card body -->
+    <div style="margin-top: 6px; font-size: 0.78rem; height: calc(100% - 36px); overflow-y: auto; padding-right: 4px; pointer-events: auto; scrollbar-width: thin;" x-show="heightPx >= 90" class="card-scrollable-body">
+        <div class="stop-desc" style="color: var(--color-text-secondary); line-height: 1.4; margin-bottom: 6px;" x-show="heightPx >= 100">{{ stop.description }}</div>
+        
+        <!-- Meal Info Box -->
+        {% if stop.meal_type %}
+        <div class="meal-box" x-show="heightPx >= 160" style="margin-top: 6px; padding: 6px 8px; font-size: 0.72rem; background: rgba(198,155,58,0.06); border: 1px solid rgba(198,155,58,0.15); border-radius: 8px; margin-bottom: 6px;">
+            <div class="meal-type" style="font-weight: 700; color: var(--color-gold);">{{ stop.meal_type }} <span class="meal-price" style="font-weight: 500;">{{ stop.meal_price_label }}</span></div>
+            <div class="meal-name" style="font-weight: 600;">{{ stop.meal_name }}</div>
+            <div class="meal-desc" style="color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ stop.meal_desc }}</div>
+        </div>
+        {% endif %}
+
+        <!-- User uploaded photos -->
+        {% if stop.user_photos.all %}
+        <div class="user-photos-carousel" x-show="heightPx >= 170" style="display: flex; gap: 6px; overflow-x: auto; margin-top: 8px; padding-bottom: 4px; pointer-events: auto;">
+            {% for photo in stop.user_photos.all %}
+            <div style="position: relative; flex-shrink: 0; width: 44px; height: 44px; border-radius: 6px; overflow: hidden; border: 1px solid var(--color-border);">
+                <img src="{{ photo.image.url }}" style="width: 100%; height: 100%; object-fit: cover;" alt="User photo">
+                <button type="button" 
+                        class="delete-photo-btn"
+                        style="position: absolute; top: 1px; right: 1px; background: rgba(0,0,0,0.6); color: white; border: none; border-radius: 50%; width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; font-size: 0.55rem; cursor: pointer; padding: 0;"
+                        @click.stop="deletePhoto({{ photo.id }}, $event)">
+                    &times;
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        <!-- Badges / Tags -->
+        <div class="stop-tags" x-show="heightPx >= 220" style="margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px;">
+            {% for tag in stop.tags %}
+            <span class="stop-tag" style="font-size: 0.65rem; padding: 2px 6px; background: #F1F5F9; border-radius: 4px; color: var(--color-text-secondary);">{{ tag }}</span>
+            {% endfor %}
+        </div>
+
+        <!-- Google Reviews & Photos Section -->
+        <div class="reviews-trigger" 
+             hx-get="{% url 'get_stop_reviews' stop.id %}" 
+             hx-target="#reviews-{{ stop.id }}" 
+             hx-swap="innerHTML"
+             hx-trigger="click once"
+             x-show="heightPx >= 200"
+             @click.stop="openReviews = (openReviews === {{ stop.id }}) ? 0 : {{ stop.id }}"
+             style="margin-top: 8px; font-size: 0.7rem; font-weight: 700; color: var(--color-teal); cursor: pointer; display: inline-block; pointer-events: auto;">
+            💬 <span x-text="openReviews === {{ stop.id }} ? 'Hide Reviews' : 'Show Reviews'">Show Reviews</span>
+        </div>
+        
+        <div id="reviews-{{ stop.id }}" class="reviews-container" x-show="openReviews === {{ stop.id }}" style="display: none; margin-top: 8px; max-height: 120px; overflow-y: auto; pointer-events: auto;">
+            <div class="loader-spinner" style="border-top-color: var(--color-teal); width: 12px; height: 12px;"></div> Loading reviews...
+        </div>
+    </div>
+
+    <!-- Resize Handle -->
+    <div class="resize-handle" @mousedown.stop="startResize($event)" @touchstart.stop="startResize($event)"></div>
+</div>

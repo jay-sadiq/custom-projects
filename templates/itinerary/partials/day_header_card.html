@@ -1,0 +1,16 @@
+<div class="day-header" id="dayHeader-{{ current_day.id }}" style="background: linear-gradient(135deg, #1E293B 0%, {{ current_day.stops.first.color_hex|default:'#8B1A1A' }} 100%);">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+        <div class="day-badge" style="margin-bottom: 0;">Day {{ current_day.day_number }} of {{ trip.duration_days }} · {{ current_day.date|date:"l, F d" }}</div>
+        <button class="btn-nav" style="font-size: 0.72rem; padding: 4px 10px; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.3); color: white; border-radius: 20px; cursor: pointer; font-weight: 500;" 
+                hx-get="{% url 'edit_day' current_day.id %}" hx-target="#dayHeader-{{ current_day.id }}" hx-swap="outerHTML">
+            ✏️ Edit Day
+        </button>
+    </div>
+    <h1>{{ current_day.theme|default:"Exploration Day" }}</h1>
+    
+    <div class="route-summary" style="margin-top: 8px;">
+        {% for stop in current_day.stops.all %}
+        {{ stop.title }}{% if not forloop.last %} → {% endif %}
+        {% endfor %}
+    </div>
+</div>

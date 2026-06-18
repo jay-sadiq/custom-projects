@@ -1,0 +1,25 @@
+<form id="dayHeaderForm-{{ day.id }}" hx-post="{% url 'edit_day' day.id %}" hx-target="#dayHeaderForm-{{ day.id }}" hx-swap="outerHTML" 
+      style="padding: 24px; background: #FFFDF9; border: 1px solid var(--color-border); border-radius: 12px; margin: 16px; box-shadow: var(--shadow-sm);">
+    {% csrf_token %}
+    <h3 style="font-size: 1rem; margin-bottom: 16px; color: var(--color-crimson); font-family: var(--font-heading);">✏️ Edit Day {{ day.day_number }} Header</h3>
+    
+    <div class="form-group">
+        <label class="form-label">Day Theme / Title</label>
+        <input type="text" name="theme" class="form-control" value="{{ day.theme }}">
+    </div>
+    
+    <div class="form-group">
+        <label class="form-label">Early Start Alert Banner</label>
+        <input type="text" name="early_start_banner" class="form-control" value="{{ day.early_start_banner }}" placeholder="e.g. ⏰ EARLY START — 7:00 AM departure.">
+    </div>
+    
+    <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;">
+        <button type="button" class="btn-nav"
+                hx-get="{% url 'view_day_header' day.id %}" hx-target="#dayHeaderForm-{{ day.id }}" hx-swap="outerHTML">
+            Cancel
+        </button>
+        <button type="submit" class="btn-nav primary">
+            Save
+        </button>
+    </div>
+</form>

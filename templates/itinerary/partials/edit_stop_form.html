@@ -1,0 +1,105 @@
+<form id="stopBlockForm-{{ stop.id }}" hx-post="{% url 'edit_stop' stop.id %}?index={{ index }}" hx-target="#stopBlockForm-{{ stop.id }}" hx-swap="outerHTML" 
+      class="edit-stop-form" style="background: #FFFDF9; border: 2px dashed var(--color-crimson); padding: 18px; border-radius: 12px; margin: 12px 0;">
+    {% csrf_token %}
+    <h3 style="font-size: 0.95rem; margin-bottom: 14px; color: var(--color-crimson); font-family: var(--font-heading); display: flex; justify-content: space-between;">
+        <span>✏️ Edit Stop {{ index|add:1 }} Details</span>
+    </h3>
+    
+    <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <div>
+            <label class="form-label" style="font-size: 0.78rem;">Time Label</label>
+            <input type="text" name="time_label" class="form-control" style="font-size: 0.82rem;" value="{{ stop.time_label }}">
+        </div>
+        <div>
+            <label class="form-label" style="font-size: 0.78rem;">Stop Title</label>
+            <input type="text" name="title" class="form-control" style="font-size: 0.82rem;" value="{{ stop.title }}" required>
+        </div>
+    </div>
+    
+    <div class="form-group">
+        <label class="form-label" style="font-size: 0.78rem;">Description</label>
+        <textarea name="description" class="form-control" rows="3" style="font-size: 0.82rem;">{{ stop.description }}</textarea>
+    </div>
+    
+    <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+        <div>
+            <label class="form-label" style="font-size: 0.78rem;">Latitude</label>
+            <input type="number" name="latitude" step="0.000001" class="form-control" style="font-size: 0.82rem;" value="{{ stop.latitude }}" required>
+        </div>
+        <div>
+            <label class="form-label" style="font-size: 0.78rem;">Longitude</label>
+            <input type="number" name="longitude" step="0.000001" class="form-control" style="font-size: 0.82rem;" value="{{ stop.longitude }}" required>
+        </div>
+        <div>
+            <label class="form-label" style="font-size: 0.78rem;">Zoom Level</label>
+            <input type="number" name="zoom_level" class="form-control" style="font-size: 0.82rem;" value="{{ stop.zoom_level }}" required>
+        </div>
+    </div>
+
+    <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <div>
+            <label class="form-label" style="font-size: 0.78rem;">Cost Local</label>
+            <input type="number" name="cost_local" step="0.01" class="form-control" style="font-size: 0.82rem;" value="{{ stop.cost_local }}">
+        </div>
+        <div>
+            <label class="form-label" style="font-size: 0.78rem;">Cost USD</label>
+            <input type="number" name="cost_usd" step="0.01" class="form-control" style="font-size: 0.82rem;" value="{{ stop.cost_usd }}">
+        </div>
+    </div>
+
+    <!-- Meal Details Segment -->
+    <fieldset style="border: 1px solid var(--color-border); border-radius: 8px; padding: 10px; margin-bottom: 12px;">
+        <legend style="font-size: 0.78rem; font-weight: bold; color: var(--color-gold); padding: 0 4px;">🍔 Meal Box (Optional)</legend>
+        <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+            <div>
+                <label class="form-label" style="font-size: 0.72rem;">Meal Type</label>
+                <select name="meal_type" class="form-control" style="font-size: 0.78rem; height: 38px; padding: 6px;">
+                    <option value="" {% if not stop.meal_type %}selected{% endif %}>None</option>
+                    <option value="Breakfast" {% if stop.meal_type == "Breakfast" %}selected{% endif %}>Breakfast</option>
+                    <option value="Lunch" {% if stop.meal_type == "Lunch" %}selected{% endif %}>Lunch</option>
+                    <option value="Dinner" {% if stop.meal_type == "Dinner" %}selected{% endif %}>Dinner</option>
+                    <option value="Snack" {% if stop.meal_type == "Snack" %}selected{% endif %}>Snack</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label" style="font-size: 0.72rem;">Meal Name</label>
+                <input type="text" name="meal_name" class="form-control" style="font-size: 0.78rem;" value="{{ stop.meal_name }}">
+            </div>
+        </div>
+        <div class="form-group" style="margin-bottom: 8px;">
+            <label class="form-label" style="font-size: 0.72rem;">Meal Description</label>
+            <input type="text" name="meal_desc" class="form-control" style="font-size: 0.78rem;" value="{{ stop.meal_desc }}">
+        </div>
+        <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px;">
+            <div>
+                <label class="form-label" style="font-size: 0.72rem;">Meal Price Label</label>
+                <input type="text" name="meal_price_label" class="form-control" style="font-size: 0.78rem;" value="{{ stop.meal_price_label }}" placeholder="e.g. ~20 AZN">
+            </div>
+            <div>
+                <label class="form-label" style="font-size: 0.72rem;">Meal Recommendation</label>
+                <input type="text" name="meal_recommendation" class="form-control" style="font-size: 0.78rem;" value="{{ stop.meal_recommendation }}" placeholder="e.g. ask for plain rice">
+            </div>
+        </div>
+    </fieldset>
+
+    <div class="form-group" style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px;">
+        <div>
+            <label class="form-label" style="font-size: 0.78rem;">Tags (comma-separated)</label>
+            <input type="text" name="tags_raw" class="form-control" style="font-size: 0.82rem;" value="{{ tags_str }}">
+        </div>
+        <div>
+            <label class="form-label" style="font-size: 0.78rem;">Color Hex</label>
+            <input type="color" name="color_hex" class="form-control" style="font-size: 0.82rem; height: 38px; padding: 2px;" value="{{ stop.color_hex }}">
+        </div>
+    </div>
+    
+    <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px;">
+        <button type="button" class="btn-nav" style="font-size: 0.75rem; padding: 4px 10px;"
+                hx-get="{% url 'view_stop' stop.id %}?index={{ index }}" hx-target="#stopBlockForm-{{ stop.id }}" hx-swap="outerHTML">
+            Cancel
+        </button>
+        <button type="submit" class="btn-nav primary" style="font-size: 0.75rem; padding: 4px 10px;">
+            Save
+        </button>
+    </div>
+</form>

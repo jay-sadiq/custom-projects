@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+
+{% block title %}AI Travel Itinerary Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    
+    <!-- Top Navigation Bar -->
+    <nav class="topnav" style="margin-bottom: 24px; border-radius: 16px; padding: 12px 24px; background: rgba(255,255,255,0.75);">
+        <a href="{% url 'dashboard' %}" class="brand" style="font-size: 1.1rem;">
+            <span>🌍 AI Travel Planner Dashboard</span>
+        </a>
+        
+        <div class="topnav-user">
+            <span class="welcome-msg">Welcome, <strong>{{ request.user.username }}</strong></span>
+            <a href="{% url 'logout' %}" class="logout-btn">Logout</a>
+        </div>
+    </nav>
+    
+    <!-- Hero Banner -->
+    <div class="dashboard-hero">
+        <h1>🌍 AI Itinerary Travel Planner</h1>
+        <p>Generate highly engaging, fully interactive day-by-day travel itineraries customized with local maps, budgets, checklists, weather, and AI agenda updates.</p>
+        <a href="#" class="dashboard-btn-create" onclick="toggleModal(true)">✨ Create New AI Itinerary</a>
+    </div>
+
+    <!-- Active Trips List -->
+    <h2 style="font-family: var(--font-heading); margin-bottom: 20px; color: var(--color-crimson);">Your Itineraries</h2>
+    
+    {% if trips %}
+    <div class="trips-grid">
+        {% for trip in trips %}
+        <div class="trip-card">
+            <div class="trip-card-header">
+                <div class="trip-card-title">🇦🇿 {{ trip.title }}</div>
+                <div class="trip-card-meta">{{ trip.destination }} · {{ trip.start_date|date:"M d" }} - {{ trip.end_date|date:"M d, Y" }}</div>
+            </div>
+            <div class="trip-card-body">
+                <div class="trip-card-stat">
+                    <span class="label">Duration</span>
+                    <strong style="color: var(--color-text-primary);">{{ trip.duration_days }} Days</strong>
+                </div>
+                <div class="trip-card-stat">
+                    <span class="label">Total Est. Cost</span>
+                    <strong style="color: var(--color-crimson);">~{{ trip.currency }} {{ trip.total_cost_local }}</strong>
+                </div>
+                <div class="trip-card-stat">
+                    <span class="label">Attendees</span>
+                    <strong style="color: var(--color-text-primary);">{{ trip.attendees.count }}</strong>
+                </div>
+            </div>
+            <a href="{% url 'trip_detail' trip.id %}" class="trip-card-action">View Itinerary →</a>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div style="background: white; border: 1px dashed var(--color-border); padding: 40px; text-align: center; border-radius: 12px; margin-bottom: 40px;">
+        <span style="font-size: 2.5rem; display: block; margin-bottom: 12px;">🗺️</span>
+        <h3 style="margin-bottom: 8px; color: var(--color-text-secondary);">No itineraries generated yet</h3>
+        <p style="color: var(--color-text-secondary); font-size: 0.88rem; margin-bottom: 20px;">Click the button above to generate your first AI travel itinerary!</p>
+        <button class="btn-nav primary" onclick="toggleModal(true)">Create Itinerary</button>
+    </div>
+    {% endif %}
+
+    <!-- Create Itinerary Dialog Modal -->
+    <div class="modal-dialog" id="createModal" style="display: none;">
+        <div class="modal-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="color: var(--color-crimson); font-size: 1.3rem;">✨ Generate Trip with AI</h2>
+                <span style="cursor: pointer; font-size: 1.2rem; font-weight: bold; color: var(--color-text-secondary);" onclick="toggleModal(false)">&times;</span>
+            </div>
+            
+            <form id="tripForm" hx-post="{% url 'create_trip' %}" hx-indicator="#loadingIndicator">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label class="form-label">Destination</label>
+                    <input type="text" name="destination" class="form-control" placeholder="e.g. Baku, Azerbaijan" required>
+                </div>
+                
+                <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div>
+                        <label class="form-label">Days</label>
+                        <input type="number" name="days_count" class="form-control" min="1" max="14" value="5" required>
+                    </div>
+                    <div>
+                        <label class="form-label">Start Date</label>
+                        <input type="date" name="start_date" class="form-control" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Special Demographics & Guidelines</label>
+                    <textarea name="details" class="form-control" rows="4" placeholder="e.g., Family trip with husband Abdul Jawad, wife, toddler Eesa (3 years old). Halal food, include toddler play parks, budget ~$1,650, staying at 28 May area Airbnb..."></textarea>
+                </div>
+                
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px;">
+                    <button type="button" class="btn-nav" onclick="toggleModal(false)">Cancel</button>
+                    <button type="submit" class="btn-nav primary" style="display: flex; align-items: center; gap: 8px;">
+                        <span>Generate Itinerary</span>
+                        <div class="loader-spinner" id="loadingIndicator" style="display: none;"></div>
+                    </button>
+                </div>
+                
+                <!-- Status Feedback -->
+                <div id="loadingIndicator" class="htmx-indicator" style="margin-top: 16px; font-size: 0.8rem; text-align: center; color: var(--color-text-secondary);">
+                    🧠 AI is drafting your travel itinerary, plotting coordinates on Leaflet, and setting up your family stats... This can take up to 20 seconds.
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleModal(show) {
+    document.getElementById('createModal').style.display = show ? 'flex' : 'none';
+}
+</script>
+{% endblock %}

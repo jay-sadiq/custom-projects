@@ -1,0 +1,227 @@
+<!-- Day panel view - swapped dynamically by HTMX -->
+{% if current_day.early_start_banner %}
+<div class="banner-alert">
+    ⏰ {{ current_day.early_start_banner }}
+</div>
+{% endif %}
+
+<!-- Day Header Partial (Includes Weather Widget) -->
+{% include 'itinerary/partials/day_header_card.html' %}
+
+<!-- Tab Control Wrapper -->
+<div x-data="{ activeTab: 'stops', openReviews: 0 }" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
+    
+    <!-- Secondary Tab Navigation Menu -->
+    <div class="day-tabs-menu">
+        <button type="button" class="day-tab-btn" :class="activeTab === 'stops' ? 'active' : ''" @click="activeTab = 'stops'">
+            📍 Stops
+        </button>
+        <button type="button" class="day-tab-btn" :class="activeTab === 'notes' ? 'active' : ''" @click="activeTab = 'notes'">
+            📝 Notes &amp; Tips
+        </button>
+        <button type="button" class="day-tab-btn" :class="activeTab === 'checklist' ? 'active' : ''" @click="activeTab = 'checklist'">
+            🎒 Checklist
+        </button>
+        <button type="button" class="day-tab-btn" :class="activeTab === 'bookings' ? 'active' : ''" @click="activeTab = 'bookings'">
+            📄 Bookings
+        </button>
+    </div>
+
+    <!-- Scroll Container for Tab Contents -->
+    <div style="flex: 1; overflow-y: auto; padding-bottom: 24px;" @scroll.debounce.80ms="checkActiveStop()">
+        
+        <!-- TAB 1: Stops Calendar Grid Timeline -->
+        <div id="stops-container" x-show="activeTab === 'stops'" x-transition:enter="transition ease-out duration-200" style="position: relative; overflow: visible;">
+            <div style="padding: 10px 16px; font-size: 0.75rem; color: var(--color-text-secondary); display: flex; flex-direction: column; gap: 4px; border-bottom: 1px solid var(--color-border); font-weight: 600; background: rgba(0,0,0,0.02);">
+                <div style="display: flex; align-items: center; gap: 6px;">⏱️ <span>Drag cards up/down to shift times · Drag bottom edge to resize duration</span></div>
+                <div style="display: flex; align-items: center; gap: 6px;">📸 <span>Drop photos directly onto stop cards to upload them</span></div>
+            </div>
+
+            <!-- Vertical Calendar wrapper -->
+            <div class="calendar-wrapper" style="position: relative; display: flex; min-height: 1440px; margin: 15px 12px; background: rgba(255, 255, 255, 0.45); border-radius: 16px; border: 1px solid var(--color-border); overflow: visible; box-shadow: var(--shadow-sm);">
+                
+                <!-- Hour Labels Column (06:00 AM to 11:00 PM) -->
+                <div style="width: 70px; display: flex; flex-direction: column; flex-shrink: 0; border-right: 1px solid rgba(226, 232, 240, 0.6); padding-top: 0px; box-sizing: border-box; pointer-events: none;">
+                    {% for h in hours_range %}
+                        <div style="height: 80px; font-size: 0.72rem; color: var(--color-text-secondary); font-weight: 600; display: flex; align-items: flex-start; justify-content: flex-end; padding-right: 10px; margin-top: -6px;">
+                            {{ h }}
+                        </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Grid Timeline area -->
+                <div style="flex-grow: 1; position: relative; min-height: 1440px;" class="calendar-timeline-grid" id="calendarTimelineGrid">
+                    <!-- Dashed horizontal lines for each hour -->
+                    <div style="position: absolute; top: 0; bottom: 0; left: 0; right: 0; display: flex; flex-direction: column; pointer-events: none; z-index: 1;">
+                        {% for h in hours_range %}
+                            <div style="height: 80px; border-bottom: 1px dashed rgba(226, 232, 240, 0.65); box-sizing: border-box;"></div>
+                        {% endfor %}
+                    </div>
+                    
+                    <!-- Stops Cards absolute layout -->
+                    {% for stop in current_day.stops.all %}
+                        {% include 'itinerary/partials/stop_block_card.html' with index=forloop.counter0 %}
+                    {% empty %}
+                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: var(--color-text-secondary); font-size: 0.88rem; width: 80%; pointer-events: none; z-index: 2;">
+                        No stops scheduled. Type in the AI Chat assistant to generate stops!
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: Notes & Tips -->
+        <div x-show="activeTab === 'notes'" x-transition:enter="transition ease-out duration-200" style="padding: 20px;" class="tab-pane-content">
+            <!-- Debounced autosaving notes -->
+            <div style="background: white; padding: 20px; border-radius: 12px; border: 1px solid var(--color-border); box-shadow: var(--shadow-sm); margin-bottom: 20px;">
+                <h3 style="font-size: 0.95rem; font-weight: 700; color: #78350F; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">📝 Day Notes</h3>
+                <textarea name="notes" 
+                          class="notes-area" 
+                          placeholder="Add confirmation references, flight check-ins, packing lists..."
+                          hx-post="{% url 'save_notes' current_day.id %}"
+                          hx-trigger="keyup changed delay:700ms"
+                          hx-target="#savedStatus"
+                          style="min-height: 180px; width: 100%;">{{ current_day.notes }}</textarea>
+                <div class="notes-footer">
+                    <span id="savedStatus"></span>
+                </div>
+            </div>
+
+            <!-- Climate Alerts & Tips -->
+            <div class="tips-section" style="border-radius: 12px; border: 1px solid #BFDBFE;">
+                <h3>💡 Tips &amp; Climate Alerts</h3>
+                <div class="tip-item">
+                    <span>🚗</span>
+                    <div>Use Bolt app for transit. Average city trips run 5–10 {{ trip.currency }} ($3–6).</div>
+                </div>
+                <div class="tip-item">
+                    <span>👶</span>
+                    <div>Toddler tip: Keep hydration levels up. Carry a lightweight carrier for narrow paths.</div>
+                </div>
+                <div class="tip-item">
+                    <span>💳</span>
+                    <div>Make sure to keep local AZN cash. Small döner shops rarely accept card payments.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: Checklist -->
+        <div x-show="activeTab === 'checklist'" x-transition:enter="transition ease-out duration-200" style="padding: 20px;">
+            <div style="background: white; padding: 20px; border-radius: 12px; border: 1px solid var(--color-border); box-shadow: var(--shadow-sm);">
+                <h3 style="font-size: 0.95rem; font-weight: 700; color: var(--color-teal); margin-bottom: 16px; text-transform: uppercase;">🎒 Trip Preparation Checklist</h3>
+                
+                {% for item in trip.checklist_items.all %}
+                <label class="checklist-item {% if item.is_completed %}done{% endif %}" style="padding: 8px 0; border-bottom: 1px solid var(--color-border);">
+                    <input type="checkbox" {% if item.is_completed %}checked{% endif %} hx-post="{% url 'toggle_checklist_item' item.id %}" hx-swap="outerHTML">
+                    <span style="font-size: 0.88rem; color: var(--color-text-primary);">{{ item.item_text }}</span>
+                </label>
+                {% empty %}
+                <div style="font-size: 0.85rem; color: var(--color-text-secondary); text-align: center; padding: 20px 0;">No checklist items generated yet.</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- TAB 4: Bookings -->
+        <div x-show="activeTab === 'bookings'" x-transition:enter="transition ease-out duration-200" style="padding: 20px;">
+            <!-- Upload bookings -->
+            <div style="background: white; padding: 20px; border-radius: 12px; border: 1px solid var(--color-border); box-shadow: var(--shadow-sm); margin-bottom: 20px;">
+                <h3 style="font-size: 0.95rem; font-weight: 700; color: var(--color-teal); margin-bottom: 14px; text-transform: uppercase;">📄 Import Booking Confirmation</h3>
+                <form hx-post="{% url 'parse_booking_pdf' trip.id %}" hx-target="#importStatus" enctype="multipart/form-data" hx-indicator="#importIndicator">
+                    {% csrf_token %}
+                    <div class="form-group">
+                        <label class="form-label" style="font-size: 0.78rem;">Upload PDF or Image confirmation</label>
+                        <input type="file" name="booking_file" class="form-control" style="font-size: 0.75rem;">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" style="font-size: 0.78rem;">Or paste booking confirmation text</label>
+                        <textarea name="paste_text" class="form-control" rows="3" style="font-size: 0.75rem;" placeholder="Paste details here..."></textarea>
+                    </div>
+                    <button type="submit" class="btn-nav primary" style="font-size: 0.8rem; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                        <span>Import Booking</span>
+                        <div class="loader-spinner" id="importIndicator" style="display: none; width: 12px; height: 12px;"></div>
+                    </button>
+                    
+                    <div id="importStatus" style="margin-top: 12px;"></div>
+                </form>
+            </div>
+
+            <!-- Display active bookings -->
+            <div style="background: white; padding: 20px; border-radius: 12px; border: 1px solid var(--color-border); box-shadow: var(--shadow-sm);">
+                <h3 style="font-size: 0.95rem; font-weight: 700; color: var(--color-text-primary); margin-bottom: 12px;">Your Bookings</h3>
+                {% for b in trip.bookings.all %}
+                <div style="padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; margin-bottom: 10px; background: #FAF9F6;">
+                    <div style="font-weight: 700; font-size: 0.88rem; display: flex; justify-content: space-between;">
+                        <span>{% if b.booking_type == 'Hotel' %}🏨{% elif b.booking_type == 'Flight' %}✈️{% else %}🎫{% endif %} {{ b.title }}</span>
+                        {% if b.cost %}<span style="color: var(--color-crimson);">${{ b.cost|floatformat:0 }}</span>{% endif %}
+                    </div>
+
+                    <div style="font-size: 0.78rem; color: var(--color-text-secondary); margin-top: 4px;"><strong>Confirmation:</strong> {{ b.confirmation_number }}</div>
+                    <div style="font-size: 0.78rem; color: var(--color-text-secondary); margin-top: 2px;">{{ b.details }}</div>
+                </div>
+                {% empty %}
+                <div style="font-size: 0.85rem; color: var(--color-text-secondary); text-align: center; padding: 20px 0;">No bookings imported yet.</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Cost breakdown summary for the day (Only visible in stops tab) -->
+        <div class="cost-section" x-show="activeTab === 'stops'">
+            <h3>💰 Cost Summary</h3>
+            {% for stop in current_day.stops.all %}
+            {% if stop.cost_local > 0 %}
+            <div class="cost-row">
+                <span class="label">{{ stop.title }}</span>
+                <span>~{{ stop.cost_local }} {{ trip.currency }} / ${{ stop.cost_usd|floatformat:0 }}</span>
+            </div>
+            {% endif %}
+            {% endfor %}
+            <div class="cost-row">
+                <span class="label">EST. DAY TOTAL</span>
+                <span>~{{ current_day.day_cost_local }} {{ trip.currency }} / ${{ current_day.day_cost_usd|floatformat:0 }}</span>
+            </div>
+        </div>
+        
+    </div>
+
+    <!-- Bottom Nav buttons to traverse days -->
+    <div class="bottom-nav" style="background: white; border-top: 1px solid var(--color-border); margin-top: auto; flex-shrink: 0; padding: 12px 24px;">
+        {% with day_num=current_day.day_number %}
+        
+        <!-- Previous Button -->
+        {% if day_num > 1 %}
+        {% for d in days %}
+        {% if d.day_number == day_num|add:-1 %}
+        <button class="btn-nav" 
+                hx-get="{% url 'day_detail' trip.id d.day_number %}"
+                hx-target="#dayPanel"
+                hx-swap="innerHTML"
+                @click="setDay('{{ d.day_number }}')">
+            ← Day {{ d.day_number }}
+        </button>
+        {% endif %}
+        {% endfor %}
+        {% else %}
+        <span></span>
+        {% endif %}
+
+        <!-- Next Button -->
+        {% if day_num < trip.duration_days %}
+        {% for d in days %}
+        {% if d.day_number == day_num|add:1 %}
+        <button class="btn-nav primary"
+                hx-get="{% url 'day_detail' trip.id d.day_number %}"
+                hx-target="#dayPanel"
+                hx-swap="innerHTML"
+                @click="setDay('{{ d.day_number }}')">
+            Day {{ d.day_number }} →
+        </button>
+        {% endif %}
+        {% endfor %}
+        {% else %}
+        <span></span>
+        {% endif %}
+        
+        {% endwith %}
+    </div>
+
+</div>
