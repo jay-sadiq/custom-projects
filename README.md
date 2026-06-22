@@ -1,5 +1,7 @@
 # Trip Planner App
 
+[![CI](https://github.com/jay-sadiq/custom-projects/actions/workflows/ci.yml/badge.svg)](https://github.com/jay-sadiq/custom-projects/actions/workflows/ci.yml)
+
 AI-powered family trip planner (Django web app). Flutter mobile companion planned.
 
 ## Quick start (development)
@@ -44,7 +46,10 @@ Optional integrations: `GEMINI_API_KEY`, `GOOGLE_PLACES_API_KEY`, `WEATHER_API_K
 ## Tests
 
 ```bash
+uv sync --dev
 uv run python manage.py test itinerary.tests
+uv run coverage run --source=itinerary manage.py test itinerary.tests
+uv run coverage report --include='itinerary/views.py'
 ```
 
 ## Planning docs
