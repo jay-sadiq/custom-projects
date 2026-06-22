@@ -8,7 +8,7 @@ from datetime import datetime, date, timedelta
 
 # Set up Django environment
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "core.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "core.settings.dev")
 django.setup()
 
 from django.contrib.auth import get_user_model

@@ -35,6 +35,11 @@ urlpatterns = [
     # LLM Dynamic Agendas & Reviews
     path('trip/<int:trip_id>/day/<int:day_number>/chat-edit/', views.chat_edit, name='chat_edit'),
     path('stop/<int:stop_id>/reviews/', views.get_stop_reviews, name='get_stop_reviews'),
+    path(
+        'stop/<int:stop_id>/place-photo/<int:photo_index>/',
+        views.proxy_place_photo,
+        name='proxy_place_photo',
+    ),
     
     # Map Geodata API
     path('trip/<int:trip_id>/day/<int:day_number>/stops/json/', views.get_stops_json, name='get_stops_json'),

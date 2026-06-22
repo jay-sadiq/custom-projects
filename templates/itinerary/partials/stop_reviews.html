@@ -1,7 +1,11 @@
-{% if place_detail.photos_json %}
+{% if photos %}
 <div class="photo-gallery">
-    {% for photo_url in place_detail.photos_json %}
-    <img src="{{ photo_url }}" alt="{{ stop.title }} photo">
+    {% for photo in photos %}
+        {% if photo.type == 'google_ref' %}
+        <img src="{% url 'proxy_place_photo' stop.id forloop.counter0 %}" alt="{{ stop.title }} photo">
+        {% else %}
+        <img src="{{ photo.url }}" alt="{{ stop.title }} photo">
+        {% endif %}
     {% endfor %}
 </div>
 {% endif %}

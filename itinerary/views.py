@@ -22,6 +22,12 @@ from .permissions import (
 )
 from .services.llm import LLMService
 from .services.mutations import MutationError, apply_stop_mutations
+from .services.places import (
+    external_photo_url,
+    fetch_google_place_photo,
+    google_photo_ref,
+    normalize_photo_entries,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -346,11 +352,12 @@ def get_stop_reviews(request, stop_id):
                         })
                     place_detail.reviews_json = reviews
                     
-                    # Store photo references
+                    # Store photo references (proxied server-side; no API key in HTML)
                     photos = []
                     for ph in detail_result.get('photos', [])[:5]:
                         ref = ph.get('photo_reference')
-                        photos.append(f"https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference={ref}&key={api_key}")
+                        if ref:
+                            photos.append(google_photo_ref(ref))
                     place_detail.photos_json = photos
                     place_detail.save()
             except Exception as e:
@@ -365,16 +372,53 @@ def get_stop_reviews(request, stop_id):
                 {"author": "Robert Chen", "rating": 4, "text": "Great vibes, highly recommend visiting in the afternoon or evening when the lights turn on."}
             ]
             place_detail.photos_json = [
-                "https://images.unsplash.com/photo-1549693578-d683be217e58?auto=format&fit=crop&w=400&q=80",
-                "https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=400&q=80"
+                external_photo_url(
+                    "https://images.unsplash.com/photo-1549693578-d683be217e58?auto=format&fit=crop&w=400&q=80"
+                ),
+                external_photo_url(
+                    "https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=400&q=80"
+                ),
             ]
             place_detail.save()
 
     return render(
         request,
         "itinerary/partials/stop_reviews.html",
-        {"stop": stop, "place_detail": place_detail},
+        {
+            "stop": stop,
+            "place_detail": place_detail,
+            "photos": normalize_photo_entries(place_detail.photos_json),
+        },
     )
+
+
+@login_required
+def proxy_place_photo(request, stop_id, photo_index):
+    stop = get_stop_for_user(request.user, stop_id)
+    place_detail = get_object_or_404(PlaceDetail, stop=stop)
+    photos = normalize_photo_entries(place_detail.photos_json)
+
+    try:
+        photo_index = int(photo_index)
+    except (TypeError, ValueError):
+        return HttpResponse(status=404)
+
+    if photo_index < 0 or photo_index >= len(photos):
+        return HttpResponse(status=404)
+
+    photo = photos[photo_index]
+    if photo.get("type") != "google_ref":
+        return HttpResponse(status=404)
+
+    try:
+        content, content_type = fetch_google_place_photo(photo["ref"])
+    except Exception as e:
+        logger.error(f"Error proxying Google place photo: {e}")
+        return HttpResponse(status=502)
+
+    response = HttpResponse(content, content_type=content_type)
+    response["Cache-Control"] = "private, max-age=86400"
+    return response
 
 @login_required
 @require_POST
@@ -558,8 +602,12 @@ def get_weather(request, day_id):
     api_key = settings.WEATHER_API_KEY
     if api_key:
         try:
-            url = f"http://api.weatherapi.com/v1/forecast.json?key={api_key}&q={day.trip.destination}&dt={day_date.strftime('%Y-%m-%d')}"
-            r = requests.get(url, timeout=3.0).json()
+            url = (
+                f"{settings.WEATHER_API_BASE_URL}/forecast.json"
+                f"?key={api_key}&q={day.trip.destination}"
+                f"&dt={day_date.strftime('%Y-%m-%d')}"
+            )
+            r = requests.get(url, timeout=settings.EXTERNAL_REQUEST_TIMEOUT).json()
             if 'forecast' in r:
                 day_forecast = r['forecast']['forecastday'][0]['day']
                 avg_temp = day_forecast.get('avgtemp_c', 30.0)

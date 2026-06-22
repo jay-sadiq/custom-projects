@@ -3,7 +3,7 @@ import django
 import re
 from datetime import datetime, date, time, timedelta
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "core.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "core.settings.dev")
 django.setup()
 
 from itinerary.models import DayItinerary, StopBlock
