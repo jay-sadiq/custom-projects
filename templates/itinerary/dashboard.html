@@ -46,7 +46,7 @@
                 </div>
                 <div class="trip-card-stat">
                     <span class="label">Attendees</span>
-                    <strong style="color: var(--color-text-primary);">{{ trip.attendees.count }}</strong>
+                    <strong style="color: var(--color-text-primary);">{{ trip.attendee_count }}</strong>
                 </div>
             </div>
             <a href="{% url 'trip_detail' trip.id %}" class="trip-card-action">View Itinerary →</a>
@@ -70,7 +70,11 @@
                 <span style="cursor: pointer; font-size: 1.2rem; font-weight: bold; color: var(--color-text-secondary);" onclick="toggleModal(false)">&times;</span>
             </div>
             
-            <form id="tripForm" hx-post="{% url 'create_trip' %}" hx-indicator="#loadingIndicator">
+            <form id="tripForm"
+                  hx-post="{% url 'create_trip' %}"
+                  hx-target="#trip-creation-status"
+                  hx-swap="innerHTML"
+                  hx-indicator="#loadingIndicator">
                 {% csrf_token %}
                 <div class="form-group">
                     <label class="form-label">Destination</label>
@@ -102,8 +106,9 @@
                 </div>
                 
                 <!-- Status Feedback -->
+                <div id="trip-creation-status"></div>
                 <div id="loadingIndicator" class="htmx-indicator" style="margin-top: 16px; font-size: 0.8rem; text-align: center; color: var(--color-text-secondary);">
-                    🧠 AI is drafting your travel itinerary, plotting coordinates on Leaflet, and setting up your family stats... This can take up to 20 seconds.
+                    🧠 Starting AI itinerary generation…
                 </div>
             </form>
         </div>

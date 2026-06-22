@@ -1,0 +1,19 @@
+<div id="trip-creation-job-{{ job.id }}"
+     {% if job.status != 'completed' and job.status != 'failed' %}
+     hx-get="{% url 'trip_creation_status' job.id %}"
+     hx-trigger="load delay:1s, every 2s"
+     hx-swap="outerHTML"
+     {% endif %}
+     style="margin-top: 16px; padding: 16px; border-radius: 12px; background: rgba(255,255,255,0.9); border: 1px solid var(--color-border); text-align: center;">
+    {% if job.status == 'failed' %}
+        <p style="color: var(--color-crimson); margin: 0;">⚠️ Trip generation failed: {{ job.error_message }}</p>
+    {% elif job.status == 'completed' %}
+        <p style="margin: 0; color: var(--color-text-secondary);">✓ Itinerary ready — redirecting…</p>
+    {% else %}
+        <div class="loader-spinner" style="margin: 0 auto 12px;"></div>
+        <p style="margin: 0 0 6px; font-weight: 600; color: var(--color-crimson);">Generating your itinerary…</p>
+        <p style="margin: 0; font-size: 0.85rem; color: var(--color-text-secondary);">
+            AI is drafting days, stops, and checklist items for {{ job.destination }}. This usually takes under a minute.
+        </p>
+    {% endif %}
+</div>

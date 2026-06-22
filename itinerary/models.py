@@ -21,10 +21,14 @@ class Trip(models.Model):
 
     @property
     def total_cost_local(self):
-        # Sum cost of all stops in local currency
-        stops_cost = sum(stop.cost_local for day in self.days.all() for stop in day.stops.all())
-        # Sum booking costs if applicable
-        bookings_cost = sum(booking.cost for booking in self.bookings.all() if booking.cost)
+        if hasattr(self, "stops_cost_total") and hasattr(self, "bookings_cost_total"):
+            return (self.stops_cost_total or 0) + (self.bookings_cost_total or 0)
+        stops_cost = sum(
+            stop.cost_local for day in self.days.all() for stop in day.stops.all()
+        )
+        bookings_cost = sum(
+            booking.cost for booking in self.bookings.all() if booking.cost
+        )
         return stops_cost + bookings_cost
 
     @property
@@ -170,4 +174,34 @@ class StopPhoto(models.Model):
 
     def __str__(self):
         return f"Photo {self.id} for {self.stop.title}"
+
+
+class TripCreationJob(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_RUNNING = "running"
+    STATUS_COMPLETED = "completed"
+    STATUS_FAILED = "failed"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_RUNNING, "Running"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_FAILED, "Failed"),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="trip_creation_jobs")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    destination = models.CharField(max_length=200)
+    days_count = models.PositiveIntegerField()
+    start_date = models.DateField()
+    details = models.TextField(blank=True)
+    trip = models.ForeignKey(Trip, on_delete=models.SET_NULL, null=True, blank=True, related_name="creation_jobs")
+    error_message = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Trip job {self.id} ({self.status})"
 

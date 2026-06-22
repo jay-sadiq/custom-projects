@@ -9,6 +9,7 @@ urlpatterns = [
 
     path('', views.dashboard, name='dashboard'),
     path('trip/create/', views.create_trip, name='create_trip'),
+    path('trip/create/status/<int:job_id>/', views.trip_creation_status, name='trip_creation_status'),
     path('trip/<int:trip_id>/', views.trip_detail, name='trip_detail'),
     path('trip/<int:trip_id>/day/<int:day_number>/', views.day_detail, name='day_detail'),
     path('day/<int:day_id>/notes/', views.save_notes, name='save_notes'),

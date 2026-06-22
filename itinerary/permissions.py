@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404
 
 from .models import Trip, DayItinerary, StopBlock, ChecklistItem, StopPhoto
+from .querysets import trip_detail_queryset, trips_for_dashboard
 
 
 def user_trips_queryset(user):
@@ -9,6 +10,15 @@ def user_trips_queryset(user):
 
 def get_trip_for_user(user, trip_id):
     return get_object_or_404(Trip, id=trip_id, user=user)
+
+
+def get_trip_detail_for_user(user, trip_id):
+    qs = trip_detail_queryset(user_trips_queryset(user))
+    return get_object_or_404(qs, id=trip_id)
+
+
+def dashboard_trips_for_user(user):
+    return trips_for_dashboard(user)
 
 
 def get_day_for_user(user, day_id):

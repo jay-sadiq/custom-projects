@@ -92,3 +92,8 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Run trip creation inline (used in tests). Default is async background thread.
+TRIP_CREATION_SYNC = os.environ.get("TRIP_CREATION_SYNC", "False") == "True"
+
+PLACE_DETAIL_CACHE_DAYS = 7

@@ -2,7 +2,7 @@ from datetime import date
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from itinerary.models import DayItinerary, StopBlock, Trip
@@ -112,7 +112,8 @@ class TripViewsTestCase(TestCase):
             longitude=-9.14,
         )
 
-    @patch("itinerary.views.LLMService.generate_itinerary", return_value=MOCK_ITINERARY)
+    @override_settings(TRIP_CREATION_SYNC=True)
+    @patch("itinerary.services.trip_creation.LLMService.generate_itinerary", return_value=MOCK_ITINERARY)
     def test_create_trip_persists_itinerary(self, _mock_llm):
         response = self.client.post(
             reverse("create_trip"),

@@ -1,6 +1,7 @@
 import json
 import logging
-from datetime import datetime, timedelta
+import threading
+from datetime import datetime
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
@@ -8,28 +9,50 @@ from django.conf import settings
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth.decorators import login_required
+from django.db import connections
 import requests
 
-from .models import Trip, TripAttendee, DayItinerary, StopBlock, Booking, ChecklistItem, PlaceDetail, StopPhoto
+from .models import (
+    DayItinerary,
+    StopBlock,
+    Booking,
+    ChecklistItem,
+    PlaceDetail,
+    StopPhoto,
+    TripCreationJob,
+)
 from .permissions import (
+    dashboard_trips_for_user,
     get_checklist_item_for_user,
     get_day_for_user,
     get_day_for_user_trip,
     get_photo_for_user,
     get_stop_for_user,
+    get_trip_detail_for_user,
     get_trip_for_user,
-    user_trips_queryset,
 )
 from .services.llm import LLMService
 from .services.mutations import MutationError, apply_stop_mutations
 from .services.places import (
-    external_photo_url,
     fetch_google_place_photo,
-    google_photo_ref,
     normalize_photo_entries,
+    place_detail_is_stale,
+    refresh_place_detail,
 )
+from .services.trip_creation import run_trip_creation_job
 
 logger = logging.getLogger(__name__)
+
+
+def _start_trip_creation_thread(job_id: int) -> None:
+    def run() -> None:
+        connections.close_all()
+        try:
+            run_trip_creation_job(job_id)
+        finally:
+            connections.close_all()
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 def _render_chat_messages(request, message, ai_message, trigger_refresh=False):
@@ -74,7 +97,7 @@ def logout_view(request):
 
 @login_required
 def dashboard(request):
-    trips = user_trips_queryset(request.user).order_by('-created_at')
+    trips = dashboard_trips_for_user(request.user)
     return render(request, 'itinerary/dashboard.html', {'trips': trips})
 
 @login_required
@@ -93,94 +116,60 @@ def create_trip(request):
     except ValueError:
         return HttpResponse("Invalid date format. Use YYYY-MM-DD.", status=400)
 
-    # 1. Generate Structured Itinerary via AI service
-    try:
-        itinerary_data = LLMService.generate_itinerary(destination, days_count, start_date_str, details)
-    except Exception as e:
-        logger.error(f"Error generating itinerary: {e}")
-        return HttpResponse(f"AI generation failed: {e}", status=500)
+    job = TripCreationJob.objects.create(
+        user=request.user,
+        destination=destination,
+        days_count=days_count,
+        start_date=start_date,
+        details=details,
+    )
 
-    # 2. Parse and save to Database
-    try:
-        trip = Trip.objects.create(
-            user=request.user,
-            title=itinerary_data.get('title', f"Adventure in {destination}"),
-            destination=destination,
-            start_date=start_date,
-            end_date=start_date + timedelta(days=days_count - 1),
-            currency=itinerary_data.get('currency', 'USD'),
-            conversion_rate=itinerary_data.get('conversion_rate', 1.0)
-        )
-
-        # Attendees
-        if "family" in details.lower() or "toddler" in details.lower() or "wife" in details.lower():
-            # Add defaults based on Baku prompt structure
-            TripAttendee.objects.create(trip=trip, name="Abdul Jawad", role="Husband")
-            TripAttendee.objects.create(trip=trip, name="Wife", role="Wife")
-            TripAttendee.objects.create(trip=trip, name="Eesa", role="Toddler (3yo)")
-        else:
-            TripAttendee.objects.create(trip=trip, name="Explorer", role="Lead traveler")
-
-        # Days and Stops
-        for day_data in itinerary_data.get('days', []):
-            day_num = day_data.get('day_number')
-            day_date = start_date + timedelta(days=day_num - 1)
-            day_itinerary = DayItinerary.objects.create(
-                trip=trip,
-                day_number=day_num,
-                date=day_date,
-                theme=day_data.get('theme', ''),
-                early_start_banner=day_data.get('early_start_banner', '')
-            )
-
-            for idx, stop_data in enumerate(day_data.get('stops', [])):
-                StopBlock.objects.create(
-                    day=day_itinerary,
-                    sequence_order=stop_data.get('sequence_order', idx + 1),
-                    time_label=stop_data.get('time_label', ''),
-                    title=stop_data.get('title', ''),
-                    description=stop_data.get('description', ''),
-                    latitude=stop_data.get('latitude', 0.0),
-                    longitude=stop_data.get('longitude', 0.0),
-                    zoom_level=stop_data.get('zoom_level', 15),
-                    cost_local=stop_data.get('cost_local', 0.0),
-                    cost_usd=stop_data.get('cost_usd', 0.0),
-                    meal_type=stop_data.get('meal_type', ''),
-                    meal_name=stop_data.get('meal_name', ''),
-                    meal_desc=stop_data.get('meal_desc', ''),
-                    meal_price_label=stop_data.get('meal_price_label', ''),
-                    meal_recommendation=stop_data.get('meal_recommendation', ''),
-                    tags=stop_data.get('tags', []),
-                    color_hex=stop_data.get('color_hex', '#E67E22')
-                )
-
-        # Create basic pre-trip checklist items
-        ChecklistItem.objects.create(trip=trip, category="Preparation", item_text="Check passport expiration dates")
-        ChecklistItem.objects.create(trip=trip, category="Preparation", item_text="Purchase travel insurance")
-        ChecklistItem.objects.create(trip=trip, category="Packing List", item_text="Comfortable walking shoes")
-        ChecklistItem.objects.create(trip=trip, category="Packing List", item_text="Power adapters & chargers")
-
-        # Return a response telling HTMX to redirect to the trip detail page
+    if settings.TRIP_CREATION_SYNC:
+        run_trip_creation_job(job.id)
+        job.refresh_from_db()
+        if job.status == TripCreationJob.STATUS_FAILED:
+            return HttpResponse(f"AI generation failed: {job.error_message}", status=500)
         response = HttpResponse()
-        response['HX-Redirect'] = f'/trip/{trip.id}/'
+        response['HX-Redirect'] = f'/trip/{job.trip_id}/'
         return response
 
-    except Exception as e:
-        logger.error(f"Error saving itinerary: {e}")
-        return HttpResponse(f"Saving itinerary failed: {e}", status=500)
+    _start_trip_creation_thread(job.id)
+    return render(
+        request,
+        "itinerary/partials/trip_creation_status.html",
+        {"job": job},
+    )
+
+
+@login_required
+def trip_creation_status(request, job_id):
+    job = get_object_or_404(TripCreationJob, id=job_id, user=request.user)
+    if job.status == TripCreationJob.STATUS_COMPLETED and job.trip_id:
+        response = render(
+            request,
+            "itinerary/partials/trip_creation_status.html",
+            {"job": job},
+        )
+        response["HX-Redirect"] = f"/trip/{job.trip_id}/"
+        return response
+    return render(
+        request,
+        "itinerary/partials/trip_creation_status.html",
+        {"job": job},
+    )
 
 @login_required
 def trip_detail(request, trip_id):
-    trip = get_trip_for_user(request.user, trip_id)
-    days = trip.days.all().order_by('day_number')
-    
-    # Check if a specific day is requested, else Day 1
+    trip = get_trip_detail_for_user(request.user, trip_id)
+    days = list(trip.days.all())
+
     day_num = int(request.GET.get('day', 1))
-    current_day = days.filter(day_number=day_num).first() or days.first()
-    
-    # Get checklist categories
-    checklist_items = trip.checklist_items.all()
-    categories = checklist_items.values_list('category', flat=True).distinct()
+    current_day = next((day for day in days if day.day_number == day_num), None)
+    if current_day is None and days:
+        current_day = days[0]
+
+    checklist_items = list(trip.checklist_items.all())
+    categories = list(dict.fromkeys(item.category for item in checklist_items))
     
     hours_range = [
         "06:00 AM", "07:00 AM", "08:00 AM", "09:00 AM", "10:00 AM", "11:00 AM",
@@ -200,9 +189,11 @@ def trip_detail(request, trip_id):
 
 @login_required
 def day_detail(request, trip_id, day_number):
-    trip = get_trip_for_user(request.user, trip_id)
-    day = get_object_or_404(DayItinerary, trip=trip, day_number=day_number)
-    days = trip.days.all().order_by('day_number')
+    trip = get_trip_detail_for_user(request.user, trip_id)
+    days = list(trip.days.all())
+    day = next((item for item in days if item.day_number == day_number), None)
+    if day is None:
+        day = get_object_or_404(DayItinerary, trip=trip, day_number=day_number)
     
     hours_range = [
         "06:00 AM", "07:00 AM", "08:00 AM", "09:00 AM", "10:00 AM", "11:00 AM",
@@ -317,69 +308,11 @@ def chat_edit(request, trip_id, day_number):
 @login_required
 def get_stop_reviews(request, stop_id):
     stop = get_stop_for_user(request.user, stop_id)
-    
-    # Try fetching PlaceDetail or creating one
+
     place_detail, created = PlaceDetail.objects.get_or_create(stop=stop)
-    
-    # If cache is old (e.g. older than 7 days) or empty, fetch new
-    if created or not place_detail.reviews_json:
-        # Check if Google places key is present
-        api_key = settings.GOOGLE_PLACES_API_KEY
-        if api_key:
-            try:
-                # Text search
-                url = f"https://maps.googleapis.com/maps/api/place/textsearch/json?query={stop.title}&key={api_key}"
-                resp = requests.get(url, timeout=5.0).json()
-                results = resp.get('results', [])
-                if results:
-                    place = results[0]
-                    g_place_id = place.get('place_id')
-                    place_detail.place_id = g_place_id
-                    place_detail.rating = place.get('rating')
-                    
-                    # Fetch details for reviews and photos
-                    detail_url = f"https://maps.googleapis.com/maps/api/place/details/json?place_id={g_place_id}&fields=reviews,photos&key={api_key}"
-                    detail_resp = requests.get(detail_url, timeout=5.0).json()
-                    detail_result = detail_resp.get('result', {})
-                    
-                    # Store 10 reviews
-                    reviews = []
-                    for rev in detail_result.get('reviews', [])[:10]:
-                        reviews.append({
-                            'author': rev.get('author_name'),
-                            'rating': rev.get('rating'),
-                            'text': rev.get('text')
-                        })
-                    place_detail.reviews_json = reviews
-                    
-                    # Store photo references (proxied server-side; no API key in HTML)
-                    photos = []
-                    for ph in detail_result.get('photos', [])[:5]:
-                        ref = ph.get('photo_reference')
-                        if ref:
-                            photos.append(google_photo_ref(ref))
-                    place_detail.photos_json = photos
-                    place_detail.save()
-            except Exception as e:
-                logger.error(f"Error fetching Google reviews: {e}")
-                
-        # If API fetch fails or key is missing, populate mock reviews/photos dynamically
-        if not place_detail.reviews_json:
-            place_detail.rating = 4.5
-            place_detail.reviews_json = [
-                {"author": "David Miller", "rating": 5, "text": f"Exceptional place! Visited {stop.title} during our family tour and it was worth it. Eesa loved running around."},
-                {"author": "Leyla Aliyeva", "rating": 4, "text": f"Very nice spot, clean and family-friendly. Standard Azerbaijani hospitality at its best!"},
-                {"author": "Robert Chen", "rating": 4, "text": "Great vibes, highly recommend visiting in the afternoon or evening when the lights turn on."}
-            ]
-            place_detail.photos_json = [
-                external_photo_url(
-                    "https://images.unsplash.com/photo-1549693578-d683be217e58?auto=format&fit=crop&w=400&q=80"
-                ),
-                external_photo_url(
-                    "https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=400&q=80"
-                ),
-            ]
-            place_detail.save()
+
+    if place_detail_is_stale(place_detail, created=created):
+        refresh_place_detail(place_detail, stop)
 
     return render(
         request,
