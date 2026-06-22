@@ -114,7 +114,7 @@ class StopBlock(models.Model):
     meal_name = models.CharField(max_length=200, blank=True)
     meal_desc = models.TextField(blank=True)
     meal_price_label = models.CharField(max_length=100, blank=True)
-    meal_recommendation = models.TextField(blank=True, help_text="e.g. Tip for Eesa or menu recommendation")
+    meal_recommendation = models.TextField(blank=True, help_text="e.g. Tip for young children or menu recommendation")
     
     # Metadata
     tags = models.JSONField(default=list, blank=True, help_text="List of string badges")
@@ -194,6 +194,7 @@ class TripCreationJob(models.Model):
     days_count = models.PositiveIntegerField()
     start_date = models.DateField()
     details = models.TextField(blank=True)
+    attendees_json = models.JSONField(default=list, blank=True)
     trip = models.ForeignKey(Trip, on_delete=models.SET_NULL, null=True, blank=True, related_name="creation_jobs")
     error_message = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

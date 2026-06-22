@@ -8,7 +8,7 @@
     <!-- Top Navigation Bar -->
     <nav class="topnav">
         <a href="{% url 'dashboard' %}" class="brand">
-            <span>🇦🇿 {{ trip.title }}</span>
+            <span>{{ trip.title }}</span>
         </a>
         
         <div class="nav-days">
@@ -80,9 +80,9 @@
         
         <div class="chat-body" id="chatHistory">
             <div class="chat-msg ai">
-                Hi Abdul Jawad! I can help edit this agenda dynamically. Try typing instructions like:<br>
+                Hi {{ request.user.first_name|default:request.user.username }}! I can help edit this agenda dynamically. Try typing instructions like:<br>
                 <em>"Move stop 3 to start at 2:00 PM"</em> or <br>
-                <em>"Remove the bazaar stop and add a playground near Quba"</em>.
+                <em>"Add a family-friendly park near {{ trip.destination }}"</em>.
             </div>
         </div>
         

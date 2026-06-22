@@ -40,6 +40,7 @@ from .services.places import (
     refresh_place_detail,
 )
 from .services.trip_creation import run_trip_creation_job
+from .services.attendees import parse_attendees_from_request
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +123,7 @@ def create_trip(request):
         days_count=days_count,
         start_date=start_date,
         details=details,
+        attendees_json=parse_attendees_from_request(request.POST, request.user),
     )
 
     if settings.TRIP_CREATION_SYNC:
@@ -312,7 +314,9 @@ def get_stop_reviews(request, stop_id):
     place_detail, created = PlaceDetail.objects.get_or_create(stop=stop)
 
     if place_detail_is_stale(place_detail, created=created):
-        refresh_place_detail(place_detail, stop)
+        used_live_api = refresh_place_detail(place_detail, stop)
+    else:
+        used_live_api = bool(place_detail.place_id)
 
     return render(
         request,
@@ -321,6 +325,7 @@ def get_stop_reviews(request, stop_id):
             "stop": stop,
             "place_detail": place_detail,
             "photos": normalize_photo_entries(place_detail.photos_json),
+            "is_demo_data": not used_live_api,
         },
     )
 
@@ -368,7 +373,10 @@ def parse_booking_pdf(request, trip_id):
             # We don't have pypdf imported, let's write a simple fallback or mock PDF parse.
             # Usually we can extract raw text.
             text_to_parse += f"\nUploaded Confirmation: {uploaded_file.name}\n"
-            text_to_parse += "Flight TK 337 from Istanbul to Baku. Departure June 25 10:00 AM, arrival June 25 1:00 PM. Reference: G8J2X4. Total cost: $350."
+            text_to_parse += (
+                "Sample flight confirmation for parsing. "
+                "Departure 10:00 AM, arrival 1:00 PM. Reference: G8J2X4. Total cost: $350."
+            )
         except Exception as e:
             return HttpResponse(f"Error reading PDF: {e}", status=400)
             
@@ -524,14 +532,8 @@ def reorder_stops(request, trip_id, day_number):
 def get_weather(request, day_id):
     import datetime as dt
     day = get_day_for_user(request.user, day_id)
-    dest = day.trip.destination.lower()
     day_date = day.date
     today = dt.date.today()
-    
-    is_today = (day_date == today)
-    is_future = (day_date > today)
-    is_past = (day_date < today)
-    
     api_key = settings.WEATHER_API_KEY
     if api_key:
         try:
@@ -547,45 +549,32 @@ def get_weather(request, day_id):
                 condition = day_forecast.get('condition', {}).get('text', 'Sunny')
                 emoji = "☀️" if "sun" in condition.lower() or "clear" in condition.lower() else "⛅"
                 
+                is_today = day_date == today
                 label = "Live Forecast" if is_today or (day_date - today).days <= 10 else "Predicted Climate"
                 return HttpResponse(f"<span>🌡️ {label}: {emoji} {avg_temp:.1f}°C · {condition}</span>")
         except Exception as e:
             logger.warning(f"Error fetching real weather: {e}")
             
-    # Mock Fallback (Customized & Realistic)
+    # Estimated fallback when live weather API is unavailable
     theme = day.theme.lower()
-    avg_temp = 31.0
-    condition = "Sunny"
-    emoji = "☀️"
-    
-    if "quba" in theme or "shahdag" in theme:
+    avg_temp = 24.0
+    condition = "Mild & Pleasant"
+    emoji = "⛅"
+
+    if "mountain" in theme or "hike" in theme or "alpine" in theme:
         avg_temp = 18.0
         condition = "Breezy & Cool"
         emoji = "⛰️💨"
-    elif "gabala" in theme or "shamakhi" in theme:
-        avg_temp = 24.0
-        condition = "Fresh & Mild"
-        emoji = "🌲⛅"
-    elif "beach" in theme or "shikhov" in theme:
-        avg_temp = 34.0
-        condition = "Hot & Sunny"
+    elif "beach" in theme or "coast" in theme or "waterfront" in theme:
+        avg_temp = 30.0
+        condition = "Warm & Sunny"
         emoji = "🏖️☀️"
     elif "rain" in theme:
-        avg_temp = 22.0
+        avg_temp = 20.0
         condition = "Showers"
         emoji = "🌧️"
-        
-    if is_today:
-        label = "Live Local Weather"
-        avg_temp += 0.5
-    elif is_future:
-        if (day_date - today).days <= 10:
-            label = "10-Day Forecast"
-        else:
-            label = "June Climate Avg"
-    else:
-        label = "Historical"
-        
+
+    label = "Estimated · Demo data"
     return HttpResponse(f"<span>🌡️ {label}: {emoji} {avg_temp}°C · {condition}</span>")
 
 

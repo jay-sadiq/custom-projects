@@ -8,21 +8,12 @@ from itinerary.models import (
     DayItinerary,
     StopBlock,
     Trip,
-    TripAttendee,
     TripCreationJob,
 )
+from itinerary.services.attendees import create_trip_attendees
 from itinerary.services.llm import LLMService
 
 logger = logging.getLogger(__name__)
-
-
-def _create_attendees(trip: Trip, details: str) -> None:
-    if any(word in details.lower() for word in ("family", "toddler", "wife")):
-        TripAttendee.objects.create(trip=trip, name="Abdul Jawad", role="Husband")
-        TripAttendee.objects.create(trip=trip, name="Wife", role="Wife")
-        TripAttendee.objects.create(trip=trip, name="Eesa", role="Toddler (3yo)")
-    else:
-        TripAttendee.objects.create(trip=trip, name="Explorer", role="Lead traveler")
 
 
 def _create_checklist_defaults(trip: Trip) -> None:
@@ -41,7 +32,9 @@ def _create_checklist_defaults(trip: Trip) -> None:
 
 
 @transaction.atomic
-def build_trip_from_itinerary(user, destination, days_count, start_date, details, itinerary_data) -> Trip:
+def build_trip_from_itinerary(
+    user, destination, days_count, start_date, details, itinerary_data, attendees=None
+) -> Trip:
     trip = Trip.objects.create(
         user=user,
         title=itinerary_data.get("title", f"Adventure in {destination}"),
@@ -52,7 +45,10 @@ def build_trip_from_itinerary(user, destination, days_count, start_date, details
         conversion_rate=itinerary_data.get("conversion_rate", 1.0),
     )
 
-    _create_attendees(trip, details)
+    if not attendees:
+        display_name = user.get_full_name().strip() or user.username
+        attendees = [{"name": display_name, "role": "Lead traveler"}]
+    create_trip_attendees(trip, attendees)
 
     for day_data in itinerary_data.get("days", []):
         day_num = day_data.get("day_number")
@@ -112,6 +108,7 @@ def run_trip_creation_job(job_id: int) -> None:
             job.start_date,
             job.details,
             itinerary_data,
+            attendees=job.attendees_json,
         )
         job.trip = trip
         job.status = TripCreationJob.STATUS_COMPLETED

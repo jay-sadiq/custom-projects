@@ -47,7 +47,7 @@ def place_detail_is_stale(place_detail, *, created: bool = False) -> bool:
     return age > timedelta(days=settings.PLACE_DETAIL_CACHE_DAYS)
 
 
-def refresh_place_detail(place_detail, stop) -> None:
+def refresh_place_detail(place_detail, stop) -> bool:
     api_key = settings.GOOGLE_PLACES_API_KEY
     if api_key:
         try:
@@ -90,34 +90,31 @@ def refresh_place_detail(place_detail, stop) -> None:
                         photos.append(google_photo_ref(ref))
                 place_detail.photos_json = photos
                 place_detail.save()
-                return
+                return True
         except Exception as e:
             logger.error("Error fetching Google reviews: %s", e)
 
     place_detail.rating = 4.5
     place_detail.reviews_json = [
         {
-            "author": "David Miller",
+            "author": "Alex M.",
             "rating": 5,
             "text": (
-                f"Exceptional place! Visited {stop.title} during our family tour "
-                "and it was worth it. Eesa loved running around."
+                f"Wonderful spot! We visited {stop.title} during our trip "
+                "and it was absolutely worth the stop."
             ),
         },
         {
-            "author": "Leyla Aliyeva",
+            "author": "Samira K.",
             "rating": 4,
-            "text": (
-                "Very nice spot, clean and family-friendly. Standard Azerbaijani "
-                "hospitality at its best!"
-            ),
+            "text": "Clean, welcoming, and great for families. Would visit again.",
         },
         {
-            "author": "Robert Chen",
+            "author": "Chris L.",
             "rating": 4,
             "text": (
-                "Great vibes, highly recommend visiting in the afternoon or evening "
-                "when the lights turn on."
+                "Lovely atmosphere — best enjoyed in the late afternoon "
+                "when the area really comes alive."
             ),
         },
     ]
@@ -130,6 +127,7 @@ def refresh_place_detail(place_detail, stop) -> None:
         ),
     ]
     place_detail.save()
+    return False
 
 
 def fetch_google_place_photo(reference: str) -> tuple[bytes, str]:

@@ -32,7 +32,7 @@
         {% for trip in trips %}
         <div class="trip-card">
             <div class="trip-card-header">
-                <div class="trip-card-title">🇦🇿 {{ trip.title }}</div>
+                <div class="trip-card-title">{{ trip.title }}</div>
                 <div class="trip-card-meta">{{ trip.destination }} · {{ trip.start_date|date:"M d" }} - {{ trip.end_date|date:"M d, Y" }}</div>
             </div>
             <div class="trip-card-body">
@@ -78,7 +78,7 @@
                 {% csrf_token %}
                 <div class="form-group">
                     <label class="form-label">Destination</label>
-                    <input type="text" name="destination" class="form-control" placeholder="e.g. Baku, Azerbaijan" required>
+                    <input type="text" name="destination" class="form-control" placeholder="e.g. Lisbon, Portugal" required>
                 </div>
                 
                 <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
@@ -93,8 +93,23 @@
                 </div>
                 
                 <div class="form-group">
-                    <label class="form-label">Special Demographics & Guidelines</label>
-                    <textarea name="details" class="form-control" rows="4" placeholder="e.g., Family trip with husband Abdul Jawad, wife, toddler Eesa (3 years old). Halal food, include toddler play parks, budget ~$1,650, staying at 28 May area Airbnb..."></textarea>
+                    <label class="form-label">Travelers</label>
+                    <div style="display: grid; gap: 8px;">
+                        {% for i in "123" %}
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                            <input type="text" name="attendee_name" class="form-control" placeholder="Name{% if forloop.first %} (optional){% endif %}">
+                            <input type="text" name="attendee_role" class="form-control" placeholder="Role (e.g. Parent, Child)">
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <p style="font-size: 0.78rem; color: var(--color-text-secondary); margin-top: 6px;">
+                        Leave blank to default to your account name as lead traveler.
+                    </p>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Trip preferences & guidelines</label>
+                    <textarea name="details" class="form-control" rows="4" placeholder="e.g., Family trip with two adults and a toddler. Vegetarian meals, kid-friendly parks, budget ~$2,000, staying near city center..."></textarea>
                 </div>
                 
                 <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px;">

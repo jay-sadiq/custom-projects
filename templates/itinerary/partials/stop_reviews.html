@@ -1,3 +1,9 @@
+{% if is_demo_data %}
+<div style="font-size: 0.78rem; color: var(--color-text-secondary); margin-bottom: 10px; padding: 6px 10px; background: rgba(139,26,26,0.06); border-radius: 8px;">
+    Demo data — connect Google Places API for live reviews and photos.
+</div>
+{% endif %}
+
 {% if photos %}
 <div class="photo-gallery">
     {% for photo in photos %}
@@ -10,7 +16,9 @@
 </div>
 {% endif %}
 
-<div style="font-weight: 700; margin-bottom: 8px;">Google Rating: {{ place_detail.rating }} ★</div>
+<div style="font-weight: 700; margin-bottom: 8px;">
+    {% if is_demo_data %}Estimated{% else %}Google{% endif %} Rating: {{ place_detail.rating }} ★
+</div>
 
 {% for rev in place_detail.reviews_json %}
 <div class="review-item">
