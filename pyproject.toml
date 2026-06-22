@@ -6,12 +6,20 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "beautifulsoup4>=4.15.0",
+    "boto3>=1.43.34",
+    "dj-database-url>=3.1.2",
     "django>=6.0.6",
+    "django-storages>=1.14.6",
+    "djangorestframework>=3.17.1",
+    "djangorestframework-simplejwt>=5.5.1",
     "google-genai>=2.8.0",
+    "gunicorn>=26.0.0",
     "pillow>=12.2.0",
+    "psycopg[binary]>=3.3.4",
     "pypdf>=6.14.0",
     "python-dotenv>=1.2.2",
     "requests>=2.34.2",
+    "whitenoise>=6.12.0",
 ]
 
 [dependency-groups]

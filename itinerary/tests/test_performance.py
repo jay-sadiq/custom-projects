@@ -243,7 +243,7 @@ class PlaceDetailCacheTestCase(TestCase):
         place_detail.refresh_from_db()
         self.assertTrue(place_detail_is_stale(place_detail))
 
-    @patch("itinerary.views.refresh_place_detail")
+    @patch("itinerary.services.reviews.refresh_place_detail", return_value=False)
     def test_get_stop_reviews_refreshes_stale_cache(self, mock_refresh):
         place_detail = PlaceDetail.objects.create(
             stop=self.stop,

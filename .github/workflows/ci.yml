@@ -42,4 +42,6 @@ jobs:
           SECRET_KEY: ci-secret-key-with-sufficient-length-and-randomness-12345
           ALLOWED_HOSTS: example.com
           CSRF_TRUSTED_ORIGINS: https://example.com
+          DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+          DATABASE_SSL_REQUIRE: "False"
         run: uv run python manage.py check --deploy

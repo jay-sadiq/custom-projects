@@ -139,8 +139,8 @@ class NeutralCopyTestCase(TestCase):
         response = self.client.get(reverse("dashboard"))
         self.assertNotContains(response, "🇦🇿")
 
-    @patch("itinerary.views.refresh_place_detail", return_value=False)
-    def test_stop_reviews_labels_demo_data(self, _mock_refresh):
+    @patch("itinerary.views.get_stop_reviews_data")
+    def test_stop_reviews_labels_demo_data(self, mock_data):
         day = self.trip.days.get(day_number=1)
         stop = StopBlock.objects.create(
             day=day,
@@ -151,6 +151,14 @@ class NeutralCopyTestCase(TestCase):
             latitude=38.69,
             longitude=-9.21,
         )
+        mock_data.return_value = {
+            "stop_id": stop.id,
+            "rating": 4.5,
+            "reviews": [],
+            "photos": [],
+            "photo_urls": [],
+            "is_demo_data": True,
+        }
         response = self.client.get(reverse("get_stop_reviews", args=[stop.id]))
         self.assertContains(response, "Demo data")
         self.assertContains(response, "Estimated Rating")

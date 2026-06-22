@@ -52,6 +52,21 @@ class ProdSettingsTestCase(TestCase):
             self.assertTrue(reloaded.SESSION_COOKIE_SECURE)
             self.assertTrue(reloaded.CSRF_COOKIE_SECURE)
             self.assertIn("example.com", reloaded.ALLOWED_HOSTS)
+            self.assertIn("whitenoise.middleware.WhiteNoiseMiddleware", reloaded.MIDDLEWARE)
+
+    def test_prod_uses_database_url_when_set(self):
+        env = {
+            "SECRET_KEY": "test-secret-key-for-prod-settings-check",
+            "ALLOWED_HOSTS": "example.com",
+            "CSRF_TRUSTED_ORIGINS": "https://example.com",
+            "DATABASE_URL": "postgres://user:pass@localhost:5432/tripplanner",
+            "DATABASE_SSL_REQUIRE": "False",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            import core.settings.prod as prod_settings
+
+            reloaded = reload(prod_settings)
+            self.assertEqual(reloaded.DATABASES["default"]["ENGINE"], "django.db.backends.postgresql")
 
 
 class PlacesPhotoProxyTestCase(TestCase):
@@ -153,7 +168,7 @@ class WeatherHttpsTestCase(TestCase):
         )
 
     @override_settings(WEATHER_API_KEY="weather-test-key")
-    @patch("itinerary.views.requests.get")
+    @patch("itinerary.services.weather.requests.get")
     def test_weather_api_uses_https(self, mock_get):
         mock_get.return_value = MagicMock(
             json=lambda: {

@@ -10,7 +10,6 @@ from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth.decorators import login_required
 from django.db import connections
-import requests
 
 from .models import (
     DayItinerary,
@@ -36,14 +35,12 @@ from .services.pdf import extract_text_from_pdf
 from .services.llm import LLMService, LLMUnavailableError
 from .validators import UploadValidationError, validate_image_upload, validate_pdf_upload
 from .services.mutations import MutationError, apply_stop_mutations
-from .services.places import (
-    fetch_google_place_photo,
-    normalize_photo_entries,
-    place_detail_is_stale,
-    refresh_place_detail,
-)
+from .services.places import fetch_google_place_photo, normalize_photo_entries
+from .services.reviews import get_stop_reviews_data
+from .services.weather import get_weather_for_day
 from .services.trip_creation import run_trip_creation_job
 from .services.attendees import parse_attendees_from_request
+from .ratelimits import enforce_ai_rate_limit, ratelimit_response
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +104,8 @@ def dashboard(request):
 @login_required
 @require_POST
 def create_trip(request):
+    if not enforce_ai_rate_limit(request):
+        return ratelimit_response(request)
     destination = request.POST.get('destination')
     days_count = int(request.POST.get('days_count', 3))
     start_date_str = request.POST.get('start_date')
@@ -258,6 +257,8 @@ def get_stops_json(request, trip_id, day_number):
 @login_required
 @require_POST
 def chat_edit(request, trip_id, day_number):
+    if not enforce_ai_rate_limit(request):
+        return ratelimit_response(request)
     day = get_day_for_user_trip(request.user, trip_id, day_number)
     message = request.POST.get('message', '').strip()
     
@@ -315,22 +316,16 @@ def chat_edit(request, trip_id, day_number):
 @login_required
 def get_stop_reviews(request, stop_id):
     stop = get_stop_for_user(request.user, stop_id)
-
-    place_detail, created = PlaceDetail.objects.get_or_create(stop=stop)
-
-    if place_detail_is_stale(place_detail, created=created):
-        used_live_api = refresh_place_detail(place_detail, stop)
-    else:
-        used_live_api = bool(place_detail.place_id)
-
+    data = get_stop_reviews_data(stop, request=request)
+    place_detail, _ = PlaceDetail.objects.get_or_create(stop=stop)
     return render(
         request,
         "itinerary/partials/stop_reviews.html",
         {
             "stop": stop,
             "place_detail": place_detail,
-            "photos": normalize_photo_entries(place_detail.photos_json),
-            "is_demo_data": not used_live_api,
+            "photos": data["photos"],
+            "is_demo_data": data["is_demo_data"],
         },
     )
 
@@ -540,52 +535,12 @@ def reorder_stops(request, trip_id, day_number):
 
 @login_required
 def get_weather(request, day_id):
-    import datetime as dt
     day = get_day_for_user(request.user, day_id)
-    day_date = day.date
-    today = dt.date.today()
-    api_key = settings.WEATHER_API_KEY
-    if api_key:
-        try:
-            url = (
-                f"{settings.WEATHER_API_BASE_URL}/forecast.json"
-                f"?key={api_key}&q={day.trip.destination}"
-                f"&dt={day_date.strftime('%Y-%m-%d')}"
-            )
-            r = requests.get(url, timeout=settings.EXTERNAL_REQUEST_TIMEOUT).json()
-            if 'forecast' in r:
-                day_forecast = r['forecast']['forecastday'][0]['day']
-                avg_temp = day_forecast.get('avgtemp_c', 30.0)
-                condition = day_forecast.get('condition', {}).get('text', 'Sunny')
-                emoji = "☀️" if "sun" in condition.lower() or "clear" in condition.lower() else "⛅"
-                
-                is_today = day_date == today
-                label = "Live Forecast" if is_today or (day_date - today).days <= 10 else "Predicted Climate"
-                return HttpResponse(f"<span>🌡️ {label}: {emoji} {avg_temp:.1f}°C · {condition}</span>")
-        except Exception as e:
-            logger.warning(f"Error fetching real weather: {e}")
-            
-    # Estimated fallback when live weather API is unavailable
-    theme = day.theme.lower()
-    avg_temp = 24.0
-    condition = "Mild & Pleasant"
-    emoji = "⛅"
-
-    if "mountain" in theme or "hike" in theme or "alpine" in theme:
-        avg_temp = 18.0
-        condition = "Breezy & Cool"
-        emoji = "⛰️💨"
-    elif "beach" in theme or "coast" in theme or "waterfront" in theme:
-        avg_temp = 30.0
-        condition = "Warm & Sunny"
-        emoji = "🏖️☀️"
-    elif "rain" in theme:
-        avg_temp = 20.0
-        condition = "Showers"
-        emoji = "🌧️"
-
-    label = "Estimated · Demo data"
-    return HttpResponse(f"<span>🌡️ {label}: {emoji} {avg_temp}°C · {condition}</span>")
+    weather = get_weather_for_day(day)
+    return HttpResponse(
+        f"<span>🌡️ {weather['label']}: {weather['emoji']} "
+        f"{weather['temperature_c']}°C · {weather['condition']}</span>"
+    )
 
 
 
