@@ -31,7 +31,10 @@ from .permissions import (
     get_trip_detail_for_user,
     get_trip_for_user,
 )
-from .services.llm import LLMService
+from .services.booking_import import parse_booking_datetime
+from .services.pdf import extract_text_from_pdf
+from .services.llm import LLMService, LLMUnavailableError
+from .validators import UploadValidationError, validate_image_upload, validate_pdf_upload
 from .services.mutations import MutationError, apply_stop_mutations
 from .services.places import (
     fetch_google_place_photo,
@@ -303,6 +306,8 @@ def chat_edit(request, trip_id, day_number):
     except MutationError as e:
         logger.error(f"Error applying mutations: {e}")
         return _render_chat_messages(request, message, f"⚠️ Error applying edits: {e}")
+    except LLMUnavailableError as e:
+        return _render_chat_messages(request, message, f"⚠️ {e}")
     except Exception as e:
         logger.error(f"Error applying mutations: {e}")
         return _render_chat_messages(request, message, f"⚠️ Error applying edits: {e}")
@@ -370,13 +375,14 @@ def parse_booking_pdf(request, trip_id):
     # Simple PDF text extractor if file uploaded
     if uploaded_file:
         try:
-            # We don't have pypdf imported, let's write a simple fallback or mock PDF parse.
-            # Usually we can extract raw text.
-            text_to_parse += f"\nUploaded Confirmation: {uploaded_file.name}\n"
-            text_to_parse += (
-                "Sample flight confirmation for parsing. "
-                "Departure 10:00 AM, arrival 1:00 PM. Reference: G8J2X4. Total cost: $350."
-            )
+            validate_pdf_upload(uploaded_file)
+            pdf_text = extract_text_from_pdf(uploaded_file)
+            if pdf_text.strip():
+                text_to_parse += f"\n{pdf_text}"
+            else:
+                text_to_parse += f"\nUploaded PDF ({uploaded_file.name}) contained no extractable text."
+        except UploadValidationError as e:
+            return HttpResponse(str(e), status=400)
         except Exception as e:
             return HttpResponse(f"Error reading PDF: {e}", status=400)
             
@@ -391,6 +397,8 @@ def parse_booking_pdf(request, trip_id):
             title=parsed_data.get('title', 'Booking confirmation'),
             confirmation_number=parsed_data.get('confirmation_number', ''),
             details=parsed_data.get('details', ''),
+            start_time=parse_booking_datetime(parsed_data.get('start_time')),
+            end_time=parse_booking_datetime(parsed_data.get('end_time')),
             cost=parsed_data.get('cost')
         )
 
@@ -399,6 +407,8 @@ def parse_booking_pdf(request, trip_id):
             "itinerary/partials/booking_imported.html",
             {"booking": booking},
         )
+    except LLMUnavailableError as e:
+        return HttpResponse(str(e), status=503)
     except Exception as e:
         logger.error(f"Error parsing booking: {e}")
         return HttpResponse(f"Failed to parse booking: {e}", status=500)
@@ -638,12 +648,15 @@ def upload_stop_photo(request, stop_id):
         return JsonResponse({'status': 'error', 'message': 'No photo file provided'}, status=400)
     
     try:
+        validate_image_upload(photo_file)
         photo = StopPhoto.objects.create(stop=stop, image=photo_file)
         return JsonResponse({
             'status': 'success',
             'photo_id': photo.id,
             'photo_url': photo.image.url
         })
+    except UploadValidationError as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     except Exception as e:
         logger.error(f"Error uploading photo: {e}")
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

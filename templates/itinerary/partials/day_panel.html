@@ -156,6 +156,12 @@
                     </div>
 
                     <div style="font-size: 0.78rem; color: var(--color-text-secondary); margin-top: 4px;"><strong>Confirmation:</strong> {{ b.confirmation_number }}</div>
+                    {% if b.start_time or b.end_time %}
+                    <div style="font-size: 0.78rem; color: var(--color-text-secondary); margin-top: 2px;">
+                        {% if b.start_time %}<strong>Starts:</strong> {{ b.start_time|date:"M d, Y g:i A" }}{% endif %}
+                        {% if b.end_time %}{% if b.start_time %} · {% endif %}<strong>Ends:</strong> {{ b.end_time|date:"M d, Y g:i A" }}{% endif %}
+                    </div>
+                    {% endif %}
                     <div style="font-size: 0.78rem; color: var(--color-text-secondary); margin-top: 2px;">{{ b.details }}</div>
                 </div>
                 {% empty %}

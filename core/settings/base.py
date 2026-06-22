@@ -97,3 +97,12 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 TRIP_CREATION_SYNC = os.environ.get("TRIP_CREATION_SYNC", "False") == "True"
 
 PLACE_DETAIL_CACHE_DAYS = 7
+
+MAX_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024
+MAX_PDF_UPLOAD_BYTES = 10 * 1024 * 1024
+ALLOWED_IMAGE_CONTENT_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+}

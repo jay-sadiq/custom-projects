@@ -7,6 +7,11 @@ from google.genai import types
 
 logger = logging.getLogger(__name__)
 
+
+class LLMUnavailableError(Exception):
+    """Raised when neither Ollama nor Gemini can serve a request."""
+
+
 class LLMService:
     OLLAMA_URL = getattr(settings, "OLLAMA_URL", "http://localhost:11434/api/generate")
     OLLAMA_MODEL = getattr(settings, "OLLAMA_MODEL", "llama3")
@@ -33,11 +38,12 @@ class LLMService:
 
     @classmethod
     def _query_gemini(cls, system_prompt: str, user_prompt: str, expect_json: bool = False) -> str:
-        if not cls.GEMINI_API_KEY:
+        api_key = getattr(settings, "GEMINI_API_KEY", "")
+        if not api_key:
             raise ValueError("GEMINI_API_KEY is not configured in settings.")
         
         try:
-            client = genai.Client(api_key=cls.GEMINI_API_KEY)
+            client = genai.Client(api_key=api_key)
             config = types.GenerateContentConfig(
                 system_instruction=system_prompt,
                 temperature=0.2,
@@ -57,14 +63,20 @@ class LLMService:
 
     @classmethod
     def query(cls, system_prompt: str, user_prompt: str, expect_json: bool = False) -> str:
-        # 1. Try local Ollama first
         result = cls._query_ollama(system_prompt, user_prompt, expect_json)
         if result:
             return result
-        
-        # 2. Fall back to Gemini API
+
+        if not getattr(settings, "GEMINI_API_KEY", ""):
+            raise LLMUnavailableError(
+                "AI is unavailable. Start Ollama locally or set GEMINI_API_KEY in your environment."
+            )
+
         logger.info("Falling back to Gemini 1.5 Flash API...")
-        return cls._query_gemini(system_prompt, user_prompt, expect_json)
+        try:
+            return cls._query_gemini(system_prompt, user_prompt, expect_json)
+        except Exception as exc:
+            raise LLMUnavailableError(f"AI request failed: {exc}") from exc
 
     @classmethod
     def generate_itinerary(cls, destination: str, days_count: int, start_date: str, details: str = "") -> dict:

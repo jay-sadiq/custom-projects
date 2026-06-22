@@ -11,7 +11,7 @@ from itinerary.models import (
     TripCreationJob,
 )
 from itinerary.services.attendees import create_trip_attendees
-from itinerary.services.llm import LLMService
+from itinerary.services.llm import LLMService, LLMUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +114,11 @@ def run_trip_creation_job(job_id: int) -> None:
         job.status = TripCreationJob.STATUS_COMPLETED
         job.error_message = ""
         job.save(update_fields=["trip", "status", "error_message", "updated_at"])
+    except LLMUnavailableError as exc:
+        logger.exception("Trip creation job %s failed: AI unavailable", job_id)
+        job.status = TripCreationJob.STATUS_FAILED
+        job.error_message = str(exc)
+        job.save(update_fields=["status", "error_message", "updated_at"])
     except Exception as exc:
         logger.exception("Trip creation job %s failed", job_id)
         job.status = TripCreationJob.STATUS_FAILED

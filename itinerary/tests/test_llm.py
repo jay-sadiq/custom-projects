@@ -75,6 +75,7 @@ class LLMQueryRoutingTestCase(SimpleTestCase):
         self.assertEqual(result, "ollama-response")
         mock_gemini.assert_not_called()
 
+    @override_settings(GEMINI_API_KEY="test-key")
     @patch.object(LLMService, "_query_gemini", return_value="gemini-response")
     @patch.object(LLMService, "_query_ollama", return_value=None)
     def test_query_falls_back_to_gemini(self, _mock_ollama, _mock_gemini):
