@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/jay-sadiq/custom-projects/actions/workflows/ci.yml/badge.svg)](https://github.com/jay-sadiq/custom-projects/actions/workflows/ci.yml)
 
-AI-powered family trip planner (Django web app + JSON API). Flutter mobile companion planned under `mobile/`.
+AI-powered family trip planner (Django web app + JSON API + Flutter companion in `mobile/`).
 
 ## Quick start (development)
 
@@ -133,6 +133,16 @@ uv run python manage.py test itinerary.tests
 uv run coverage run --source=itinerary manage.py test itinerary.tests
 uv run coverage report --include='itinerary/views.py'
 ```
+
+## Mobile app (Phase 10)
+
+```bash
+cd mobile
+flutter pub get
+flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8000
+```
+
+See [`mobile/README.md`](mobile/README.md) for emulator URLs, structure, and CI.
 
 ## Planning docs
 
