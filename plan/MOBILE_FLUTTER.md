@@ -1,4 +1,13 @@
-# Flutter Companion Mobile App — Plan
+# Annex B — API & Flutter Mobile
+
+**Parent plan:** [MASTER_PLAN.md](./MASTER_PLAN.md) — vision, user journey, competitive analysis, unified timeline.
+
+| | |
+|--|--|
+| **Phases covered** | 9–13 |
+| **Milestones** | M2 Beta (9) · M3 v1.0 (10–13) |
+| **Prerequisites** | [Annex A](./ROADMAP.md) Phases 1–4 minimum; Phase 8 for store builds |
+| **Related** | [Annex C: Product Features](./PRODUCT_FEATURES.md) Phase 15 overlaps collab |
 
 Add a **Flutter hybrid companion app** (iOS + Android from one codebase) that shares the **same Django backend** as the existing web app. One repo, one API, one domain model — web keeps HTMX templates; mobile consumes JSON.
 
@@ -8,88 +17,16 @@ Add a **Flutter hybrid companion app** (iOS + Android from one codebase) that sh
 
 | Layer | Technology | Role |
 |-------|------------|------|
-| Web (existing) | Django templates + HTMX + Alpine + Leaflet | Full planner UI in browser |
-| API (new) | Django REST Framework on `/api/v1/` | Shared contract for mobile (and future clients) |
-| Mobile (new) | Flutter 3.x (`mobile/`) | Companion: view trips, map, checklist, notes, AI edits on the go |
-| Backend logic | `itinerary/services/` (LLM, etc.) | Unchanged; called from web views **and** API views |
+| Web | Django + HTMX + Leaflet | Full planner UI |
+| API | DRF `/api/v1/` | Shared contract for mobile |
+| Mobile | Flutter `mobile/` | Companion on iOS/Android |
+| Logic | `itinerary/services/` | Single source for web + API |
 
-**“Hybrid” here means:** one Flutter codebase compiles to native iOS and Android (optional Flutter web target later — not a replacement for the Django web UI in v1).
+**Hybrid** = one Flutter codebase → iOS + Android. **Companion** = read + light edit on mobile; full calendar editing stays web-first until Annex B Phase 12.
 
-**Companion, not clone:** v1 mobile focuses on **read + light edit** (notes, checklist, chat-edit, map navigation). Heavy calendar drag-resize and admin stay web-first until Phase 12.
-
----
-
-## Monorepo layout
-
-Django stays at the repo root (no backend folder move). Flutter lives in `mobile/`.
-
-```
-trip_planner_app/
-├── plan/
-│   ├── ROADMAP.md              # Web hardening + master timeline
-│   └── MOBILE_FLUTTER.md       # This document
-├── core/                       # Django project
-├── itinerary/                  # Django app (models, services, views, api/)
-├── templates/
-├── static/
-├── mobile/                     # NEW — Flutter companion app
-│   ├── pubspec.yaml
-│   ├── analysis_options.yaml
-│   ├── lib/
-│   │   ├── main.dart
-│   │   ├── app.dart
-│   │   ├── config/             # env, API base URL
-│   │   ├── api/                # Dio client, interceptors, DTOs
-│   │   ├── models/             # Dart models (mirror API serializers)
-│   │   ├── repositories/
-│   │   ├── providers/          # Riverpod or Bloc
-│   │   ├── screens/
-│   │   └── widgets/
-│   ├── test/
-│   ├── android/
-│   └── ios/
-├── .github/workflows/
-│   ├── ci.yml                  # Django: test, check
-│   └── mobile.yml              # Flutter: analyze, test
-├── pyproject.toml
-└── README.md                   # Root runbook: backend + mobile
-```
-
-### `.gitignore` additions (when `mobile/` is created)
-
-```
-mobile/.dart_tool/
-mobile/build/
-mobile/.flutter-plugins
-mobile/.flutter-plugins-dependencies
-mobile/**/Generated.xcconfig
-mobile/**/flutter_export_environment.sh
-```
-
-### Root README structure
-
-- **Backend:** `uv sync`, `.env`, `manage.py runserver`
-- **Mobile:** `cd mobile && flutter pub get && flutter run`
-- **API base URL:** `http://10.0.2.2:8000` (Android emulator), `http://localhost:8000` (iOS sim), staging/prod URLs for release builds
+Monorepo layout and prerequisites: [MASTER_PLAN.md](./MASTER_PLAN.md) §1 and Annex A Phases 1–4.
 
 ---
-
-## Prerequisites (web phases — do not skip)
-
-Mobile **must not** start until these web roadmap phases are done:
-
-| Phase | Why mobile depends on it |
-|-------|---------------------------|
-| **Phase 1** (Auth / IDOR) | API must enforce `trip.user == request.user` |
-| **Phase 2** (XSS + LLM allowlist) | `chat_edit` API reuses hardened mutation logic |
-| **Phase 3** (Prod config, photo proxy) | Mobile must not receive Google API keys in JSON |
-| **Phase 4** (Tests + CI) | API contract tests before Flutter investment |
-
-Phase 8 (deploy) is required before TestFlight / Play Internal Testing, not before local Flutter dev.
-
----
-
-## Phase 9 — Shared REST API (backend)
 
 **Duration:** 1.5 weeks  
 **Outcome:** Versioned JSON API alongside existing web views; no breaking change to HTMX UI.
@@ -338,72 +275,19 @@ Phase 8 (deploy) is required before TestFlight / Play Internal Testing, not befo
 
 ---
 
-## Dependency graph (mobile track)
+## Next phases
 
-```mermaid
-flowchart TD
-    P1[Web Phase 1: Auth] --> P9[Phase 9: REST API]
-    P2[Web Phase 2: LLM safety] --> P9
-    P3[Web Phase 3: Secrets] --> P9
-    P4[Web Phase 4: CI] --> P9
-    P9 --> P10[Phase 10: Flutter shell]
-    P10 --> P11[Phase 11: Core screens]
-    P11 --> P12[Phase 12: Polish + offline]
-    P8[Web Phase 8: Deploy] --> P13[Phase 13: Store release]
-    P12 --> P13
-```
+| Phase | Document |
+|-------|----------|
+| 14–18 Product competitiveness | [Annex C: PRODUCT_FEATURES.md](./PRODUCT_FEATURES.md) |
+| Unified timeline & metrics | [MASTER_PLAN.md](./MASTER_PLAN.md) |
 
----
+## Deferred to Annex C or later
 
-## Master timeline (mobile add-on)
-
-Assumes web Phases 0–4 done first (~4 weeks part-time), then mobile track:
-
-| Phase | Focus | Duration | Cumulative (from mobile start) |
-|-------|--------|----------|--------------------------------|
-| 9 | REST API | 1.5 weeks | ~10 days |
-| 10 | Flutter foundation | 1 week | ~17 days |
-| 11 | Core screens | 2 weeks | ~31 days |
-| 12 | Polish + offline | 1.5 weeks | ~42 days |
-| 13 | Store release | 1 week | ~49 days |
-
-**~10–12 weeks part-time** for mobile after web security foundation.  
-**Parallel option:** Phase 10 bootstrap can start on day 1 of Phase 9 (health endpoint only) if API URLs are stubbed.
-
----
-
-## Suggested execution prompts
-
-1. **Phase 9:** "Add DRF + JWT under `itinerary/api/`. Implement trips/days/stops/checklist endpoints using `get_trip_for_user`. Extract `chat_edit` logic to `services/mutations.py`. Add `test_api.py`."
-2. **Phase 10:** "Create Flutter app in `mobile/`. Dio + JWT + Riverpod + go_router. Login/register screens."
-3. **Phase 11:** "Build trips list, trip detail, flutter_map stops, checklist, chat-edit screen against `/api/v1/`."
-
----
-
-## Success metrics (mobile)
-
-| Metric | Target (post Phase 11) | Target (post Phase 13) |
-|--------|-------------------------|-------------------------|
-| API endpoints with ownership tests | ≥15 | ≥15 |
-| Flutter widget/unit tests | ≥10 | ≥20 |
-| Core flows on real device | 3/6 | 6/6 |
-| Web/mobile data parity | Same DB, same user | Same |
-| Store internal builds | — | iOS + Android |
-
-**Core flows:** login, list trips, create trip, view map, checklist toggle, chat edit.
-
----
-
-## What we explicitly defer (v2+)
-
-- Flutter **web** target replacing Django templates
-- Full calendar drag-resize parity with web
-- Push notifications (trip reminders)
-- Deep link from email → open trip in app
-- Shared Dart/Python models (codegen) — JSON API is the contract
+- Push notifications → [Phase 17](./PRODUCT_FEATURES.md#phase-17--offline-documents--push)
+- Full group collab → [Phase 15](./PRODUCT_FEATURES.md#phase-15--group-collaboration--voting)
+- Flutter web replacing Django templates
 - Apple Watch / Android Wear
-
----
 
 ## Maintenance model (one repo)
 
