@@ -1,9 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/theme/app_theme.dart';
+import 'models/trip_models.dart';
+import 'trips_providers.dart';
+import 'widgets/chat_edit_sheet.dart';
+import 'widgets/checklist_section.dart';
+import 'widgets/day_notes_field.dart';
+import 'widgets/stop_detail_sheet.dart';
+import 'widgets/trip_map.dart';
 
-class TripDetailScreen extends StatelessWidget {
+class TripDetailScreen extends ConsumerWidget {
   const TripDetailScreen({
     super.key,
     required this.tripId,
@@ -13,50 +22,298 @@ class TripDetailScreen extends StatelessWidget {
   final String tripId;
   final int dayNumber;
 
+  int get _tripIdInt => int.tryParse(tripId) ?? 0;
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tripAsync = ref.watch(tripDetailProvider(_tripIdInt));
+    final daysAsync = ref.watch(tripDaysProvider(_tripIdInt));
+    final repository = ref.watch(tripsRepositoryProvider);
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('Trip $tripId'),
+        title: tripAsync.when(
+          data: (trip) => Text(
+            trip.title.isNotEmpty ? trip.title : trip.destination,
+            overflow: TextOverflow.ellipsis,
+          ),
+          loading: () => const Text('Trip'),
+          error: (error, stackTrace) => const Text('Trip'),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/'),
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
+      floatingActionButton: daysAsync.maybeWhen(
+        data: (days) {
+          final day = _findDay(days);
+          if (day == null) return null;
+          return FloatingActionButton.extended(
+            onPressed: () => ChatEditSheet.show(
+              context,
+              dayId: day.id,
+              tripId: _tripIdInt,
+              repository: repository,
+            ),
+            icon: const Icon(Icons.auto_awesome),
+            label: const Text('AI edit'),
+          );
+        },
+        orElse: () => null,
+      ),
+      body: daysAsync.when(
+        data: (days) {
+          if (days.isEmpty) {
+            return const Center(child: Text('No days found for this trip.'));
+          }
+          final day = _findDay(days) ?? days.first;
+          final stopsAsync = ref.watch(dayStopsProvider(day.id));
+
+          return RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(tripDetailProvider(_tripIdInt));
+              ref.invalidate(tripDaysProvider(_tripIdInt));
+              ref.invalidate(dayStopsProvider(day.id));
+              ref.invalidate(tripChecklistProvider(_tripIdInt));
+            },
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+              children: [
+                _DayChipBar(
+                  tripId: tripId,
+                  days: days,
+                  selectedDayNumber: day.dayNumber,
+                ),
+                const SizedBox(height: 16),
+                _DayHeader(day: day),
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 240,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: stopsAsync.when(
+                      data: (stops) => TripMap(
+                        stops: stops,
+                        onStopTap: (stop) =>
+                            StopDetailSheet.show(context, stop),
+                      ),
+                      loading: () =>
+                          const Center(child: CircularProgressIndicator()),
+                      error: (error, stackTrace) => Container(
+                        color: Colors.grey.shade100,
+                        alignment: Alignment.center,
+                        child: const Text('Could not load map'),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                stopsAsync.when(
+                  data: (stops) => _StopsList(
+                    stops: stops,
+                    onStopTap: (stop) => StopDetailSheet.show(context, stop),
+                  ),
+                  loading: () => const Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                  ),
+                  error: (error, stackTrace) => const Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text('Could not load stops'),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DayNotesField(day: day, repository: repository),
+                const SizedBox(height: 16),
+                ChecklistSection(tripId: _tripIdInt, repository: repository),
+              ],
+            ),
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stackTrace) => const Center(child: Text('Could not load trip days')),
+      ),
+    );
+  }
+
+  DayItinerary? _findDay(List<DayItinerary> days) {
+    for (final day in days) {
+      if (day.dayNumber == dayNumber) return day;
+    }
+    return null;
+  }
+}
+
+class _DayChipBar extends StatelessWidget {
+  const _DayChipBar({
+    required this.tripId,
+    required this.days,
+    required this.selectedDayNumber,
+  });
+
+  final String tripId;
+  final List<DayItinerary> days;
+  final int selectedDayNumber;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final day in days)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text('Day ${day.dayNumber}'),
+                selected: day.dayNumber == selectedDayNumber,
+                onSelected: (_) =>
+                    context.go('/trips/$tripId/day/${day.dayNumber}'),
+                selectedColor: AppColors.crimson.withValues(alpha: 0.15),
+                labelStyle: TextStyle(
+                  color: day.dayNumber == selectedDayNumber
+                      ? AppColors.crimson
+                      : AppColors.textPrimary,
+                  fontWeight: day.dayNumber == selectedDayNumber
+                      ? FontWeight.w700
+                      : FontWeight.w500,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DayHeader extends StatelessWidget {
+  const _DayHeader({required this.day});
+
+  final DayItinerary day;
+
+  @override
+  Widget build(BuildContext context) {
+    final dateLabel =
+        day.date != null ? DateFormat.yMMMEd().format(day.date!) : '';
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Wrap(
-              spacing: 8,
-              children: List.generate(3, (index) {
-                final day = index + 1;
-                final selected = day == dayNumber;
-                return ChoiceChip(
-                  label: Text('Day $day'),
-                  selected: selected,
-                  onSelected: (_) => context.go('/trips/$tripId/day/$day'),
-                  selectedColor: AppColors.crimson.withValues(alpha: 0.15),
-                  labelStyle: TextStyle(
-                    color: selected ? AppColors.crimson : AppColors.textPrimary,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            if (day.theme.isNotEmpty)
+              Text(
+                day.theme,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            if (dateLabel.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                dateLabel,
+                style: const TextStyle(color: AppColors.textSecondary),
+              ),
+            ],
+            if (day.earlyStartBanner.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.amber.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.wb_sunny, color: Colors.amber.shade800, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(day.earlyStartBanner)),
+                  ],
+                ),
+              ),
+            ],
+            if (day.dayCostLocal != null && day.dayCostLocal! > 0) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Day cost: ${day.dayCostLocal!.toStringAsFixed(2)}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StopsList extends StatelessWidget {
+  const _StopsList({
+    required this.stops,
+    required this.onStopTap,
+  });
+
+  final List<StopBlock> stops;
+  final ValueChanged<StopBlock> onStopTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Text(
+                'Stops',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ),
+            if (stops.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'No stops scheduled for this day.',
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+              )
+            else
+              for (final stop in stops)
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor:
+                        parseStopColor(stop.colorHex).withValues(alpha: 0.15),
+                    child: Text(
+                      '${stop.sequenceOrder}',
+                      style: TextStyle(
+                        color: parseStopColor(stop.colorHex),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
-                );
-              }),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Day $dayNumber itinerary',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
+                  title: Text(stop.title),
+                  subtitle: Text(
+                    [
+                      if (stop.timeLabel.isNotEmpty) stop.timeLabel,
+                      if (stop.description.isNotEmpty) stop.description,
+                    ].join(' · '),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Trip list, map, and stops arrive in Phase 11. Navigation shell is ready.',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => onStopTap(stop),
+                ),
           ],
         ),
       ),

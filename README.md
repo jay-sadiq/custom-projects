@@ -134,7 +134,9 @@ uv run coverage run --source=itinerary manage.py test itinerary.tests
 uv run coverage report --include='itinerary/views.py'
 ```
 
-## Mobile app (Phase 10)
+## Mobile app (Phase 10–11)
+
+Trip list, AI create-trip, day map, checklist, notes, and chat edit are in the Flutter companion.
 
 ```bash
 cd mobile

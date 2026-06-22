@@ -31,20 +31,27 @@ flutter test
 
 ```
 lib/
-  config/env.dart          # API_BASE_URL dart-define
-  core/api/api_client.dart # Dio + JWT refresh interceptor
-  core/storage/            # Secure token storage
-  features/auth/           # Login, register, Riverpod auth state
-  features/home/           # Shell home + API health card
-  features/trips/          # Trip/day navigation shell (Phase 11 fills data)
-  routing/app_router.dart  # go_router + auth guard
+  config/env.dart              # API_BASE_URL dart-define
+  core/api/api_client.dart     # Dio + JWT refresh interceptor
+  core/storage/                # Secure token storage
+  features/auth/               # Login, register, Riverpod auth state
+  features/trips/              # Trip list, create, detail, map, checklist, chat
+  routing/app_router.dart      # go_router + auth guard
 ```
 
-## Phase 10 scope
+## Phase 10 — Foundation
 
 - Authenticated shell with login/register
 - JWT persisted in secure storage (survives app restart)
-- API health check on home screen
-- Routes: `/login`, `/register`, `/`, `/trips/:id/day/:n`
+- Routes: `/login`, `/register`, `/`, `/trips/create`, `/trips/:id/day/:n`
 
-Trip list, map, and create-trip UI land in **Phase 11**.
+## Phase 11 — Core companion screens
+
+- **Trip list** — pull-to-refresh dashboard at `/`
+- **Create trip** — AI job polling via `POST /trips/` + `GET /trip-jobs/{id}/`
+- **Trip detail** — day chips, theme/banner/costs, OSM map (`flutter_map`), stops list
+- **Notes** — debounced `PATCH /days/{id}/`
+- **Checklist** — toggle via `POST /checklist-items/{id}/toggle/`
+- **AI chat edit** — bottom sheet calling `POST /days/{id}/chat-edit/`
+
+Offline cache, camera upload, and weather widgets land in **Phase 12**.

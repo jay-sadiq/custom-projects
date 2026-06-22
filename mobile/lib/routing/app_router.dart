@@ -5,8 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/auth_providers.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/auth/register_screen.dart';
-import '../../features/home/home_screen.dart';
+import '../../features/trips/create_trip_screen.dart';
 import '../../features/trips/trip_detail_screen.dart';
+import '../../features/trips/trips_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(authControllerProvider);
@@ -47,7 +48,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/',
-        builder: (context, state) => const HomeScreen(),
+        builder: (context, state) => const TripsScreen(),
+      ),
+      GoRoute(
+        path: '/trips/create',
+        builder: (context, state) => const CreateTripScreen(),
       ),
       GoRoute(
         path: '/trips/:tripId',
