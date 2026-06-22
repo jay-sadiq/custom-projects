@@ -11,6 +11,8 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "core.settings")
 django.setup()
 
+from django.contrib.auth import get_user_model
+
 from itinerary.models import Trip, TripAttendee, DayItinerary, StopBlock, ChecklistItem, Booking
 
 def clean_text(text):
@@ -177,9 +179,15 @@ def seed_from_html():
         sys.exit(1)
         
     # Get or create Trip
+    User = get_user_model()
+    user = User.objects.filter(is_superuser=True).first() or User.objects.first()
+    if user is None:
+        user = User.objects.create_superuser("admin", "", "admin")
+
     trip, created = Trip.objects.get_or_create(
         title="🇦🇿 Baku Family Adventure 2026",
         destination="Baku, Azerbaijan",
+        user=user,
         defaults={
             'start_date': date(2026, 6, 25),
             'end_date': date(2026, 7, 5),

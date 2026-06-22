@@ -8,10 +8,18 @@ from django.conf import settings
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q
 import requests
 
 from .models import Trip, TripAttendee, DayItinerary, StopBlock, Booking, ChecklistItem, PlaceDetail, StopPhoto
+from .permissions import (
+    get_checklist_item_for_user,
+    get_day_for_user,
+    get_day_for_user_trip,
+    get_photo_for_user,
+    get_stop_for_user,
+    get_trip_for_user,
+    user_trips_queryset,
+)
 from .services.llm import LLMService
 
 logger = logging.getLogger(__name__)
@@ -48,7 +56,7 @@ def logout_view(request):
 
 @login_required
 def dashboard(request):
-    trips = Trip.objects.filter(Q(user=request.user) | Q(user__isnull=True)).order_by('-created_at')
+    trips = user_trips_queryset(request.user).order_by('-created_at')
     return render(request, 'itinerary/dashboard.html', {'trips': trips})
 
 @login_required
@@ -145,7 +153,7 @@ def create_trip(request):
 
 @login_required
 def trip_detail(request, trip_id):
-    trip = get_object_or_404(Trip, id=trip_id)
+    trip = get_trip_for_user(request.user, trip_id)
     days = trip.days.all().order_by('day_number')
     
     # Check if a specific day is requested, else Day 1
@@ -174,7 +182,7 @@ def trip_detail(request, trip_id):
 
 @login_required
 def day_detail(request, trip_id, day_number):
-    trip = get_object_or_404(Trip, id=trip_id)
+    trip = get_trip_for_user(request.user, trip_id)
     day = get_object_or_404(DayItinerary, trip=trip, day_number=day_number)
     days = trip.days.all().order_by('day_number')
     
@@ -195,7 +203,7 @@ def day_detail(request, trip_id, day_number):
 @login_required
 @require_POST
 def save_notes(request, day_id):
-    day = get_object_or_404(DayItinerary, id=day_id)
+    day = get_day_for_user(request.user, day_id)
     day.notes = request.POST.get('notes', '')
     day.save()
     
@@ -205,7 +213,7 @@ def save_notes(request, day_id):
 @login_required
 @require_POST
 def toggle_checklist_item(request, item_id):
-    item = get_object_or_404(ChecklistItem, id=item_id)
+    item = get_checklist_item_for_user(request.user, item_id)
     item.is_completed = not item.is_completed
     item.save()
     
@@ -222,8 +230,7 @@ def toggle_checklist_item(request, item_id):
 
 @login_required
 def get_stops_json(request, trip_id, day_number):
-    trip = get_object_or_404(Trip, id=trip_id)
-    day = get_object_or_404(DayItinerary, trip=trip, day_number=day_number)
+    day = get_day_for_user_trip(request.user, trip_id, day_number)
     
     stops_list = []
     for stop in day.stops.all().order_by('sequence_order'):
@@ -242,8 +249,7 @@ def get_stops_json(request, trip_id, day_number):
 @login_required
 @require_POST
 def chat_edit(request, trip_id, day_number):
-    trip = get_object_or_404(Trip, id=trip_id)
-    day = get_object_or_404(DayItinerary, trip=trip, day_number=day_number)
+    day = get_day_for_user_trip(request.user, trip_id, day_number)
     message = request.POST.get('message', '').strip()
     
     if not message:
@@ -322,7 +328,7 @@ def chat_edit(request, trip_id, day_number):
 
 @login_required
 def get_stop_reviews(request, stop_id):
-    stop = get_object_or_404(StopBlock, id=stop_id)
+    stop = get_stop_for_user(request.user, stop_id)
     
     # Try fetching PlaceDetail or creating one
     place_detail, created = PlaceDetail.objects.get_or_create(stop=stop)
@@ -408,7 +414,7 @@ def get_stop_reviews(request, stop_id):
 @login_required
 @require_POST
 def parse_booking_pdf(request, trip_id):
-    trip = get_object_or_404(Trip, id=trip_id)
+    trip = get_trip_for_user(request.user, trip_id)
     uploaded_file = request.FILES.get('booking_file')
     paste_text = request.POST.get('paste_text', '').strip()
     
@@ -452,7 +458,7 @@ def parse_booking_pdf(request, trip_id):
 
 @login_required
 def edit_day(request, day_id):
-    day = get_object_or_404(DayItinerary, id=day_id)
+    day = get_day_for_user(request.user, day_id)
     trip = day.trip
     if request.method == 'POST':
         day.theme = request.POST.get('theme', '')
@@ -469,7 +475,7 @@ def edit_day(request, day_id):
 
 @login_required
 def view_day_header(request, day_id):
-    day = get_object_or_404(DayItinerary, id=day_id)
+    day = get_day_for_user(request.user, day_id)
     return render(request, 'itinerary/partials/day_header_card.html', {
         'current_day': day,
         'trip': day.trip
@@ -477,7 +483,7 @@ def view_day_header(request, day_id):
 
 @login_required
 def edit_stop(request, stop_id):
-    stop = get_object_or_404(StopBlock, id=stop_id)
+    stop = get_stop_for_user(request.user, stop_id)
     index = int(request.GET.get('index', 0))
     
     if request.method == 'POST':
@@ -531,7 +537,7 @@ def edit_stop(request, stop_id):
 
 @login_required
 def view_stop(request, stop_id):
-    stop = get_object_or_404(StopBlock, id=stop_id)
+    stop = get_stop_for_user(request.user, stop_id)
     index = int(request.GET.get('index', 0))
     return render(request, 'itinerary/partials/stop_block_card.html', {
         'stop': stop,
@@ -541,7 +547,7 @@ def view_stop(request, stop_id):
 @login_required
 @require_POST
 def delete_stop(request, stop_id):
-    stop = get_object_or_404(StopBlock, id=stop_id)
+    stop = get_stop_for_user(request.user, stop_id)
     day = stop.day
     stop.delete()
     
@@ -559,8 +565,7 @@ def delete_stop(request, stop_id):
 @login_required
 @require_POST
 def reorder_stops(request, trip_id, day_number):
-    trip = get_object_or_404(Trip, id=trip_id)
-    day = get_object_or_404(DayItinerary, trip=trip, day_number=day_number)
+    day = get_day_for_user_trip(request.user, trip_id, day_number)
     
     stop_ids_raw = request.POST.get('stop_ids', '[]')
     try:
@@ -579,7 +584,7 @@ def reorder_stops(request, trip_id, day_number):
 @login_required
 def get_weather(request, day_id):
     import datetime as dt
-    day = get_object_or_404(DayItinerary, id=day_id)
+    day = get_day_for_user(request.user, day_id)
     dest = day.trip.destination.lower()
     day_date = day.date
     today = dt.date.today()
@@ -647,7 +652,7 @@ def get_weather(request, day_id):
 @login_required
 @require_POST
 def update_stop_times(request, stop_id):
-    stop = get_object_or_404(StopBlock, id=stop_id)
+    stop = get_stop_for_user(request.user, stop_id)
     start_str = request.POST.get('start_time')  # e.g., "09:30"
     end_str = request.POST.get('end_time')      # e.g., "11:00"
     
@@ -695,7 +700,7 @@ def update_stop_times(request, stop_id):
 @login_required
 @require_POST
 def upload_stop_photo(request, stop_id):
-    stop = get_object_or_404(StopBlock, id=stop_id)
+    stop = get_stop_for_user(request.user, stop_id)
     photo_file = request.FILES.get('photo')
     if not photo_file:
         return JsonResponse({'status': 'error', 'message': 'No photo file provided'}, status=400)
@@ -714,6 +719,6 @@ def upload_stop_photo(request, stop_id):
 @login_required
 @require_POST
 def delete_stop_photo(request, photo_id):
-    photo = get_object_or_404(StopPhoto, id=photo_id)
+    photo = get_photo_for_user(request.user, photo_id)
     photo.delete()
     return JsonResponse({'status': 'success'})

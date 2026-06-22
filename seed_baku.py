@@ -9,16 +9,28 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "core.settings")
 django.setup()
 
+from django.contrib.auth import get_user_model
+
 from itinerary.models import Trip, TripAttendee, DayItinerary, StopBlock, ChecklistItem, Booking
+
+
+def _seed_user():
+    User = get_user_model()
+    user = User.objects.filter(is_superuser=True).first() or User.objects.first()
+    if user is None:
+        user = User.objects.create_superuser("admin", "", "admin")
+    return user
 
 
 def seed_itinerary():
     print("Seeding Baku Family Itinerary 2026...")
-    
+    user = _seed_user()
+
     # 1. Create Trip
     trip, created = Trip.objects.get_or_create(
         title="🇦🇿 Baku Family Adventure 2026",
         destination="Baku, Azerbaijan",
+        user=user,
         defaults={
             'start_date': date(2026, 6, 25),
             'end_date': date(2026, 7, 5),
