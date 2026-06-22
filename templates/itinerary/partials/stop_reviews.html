@@ -1,0 +1,19 @@
+{% if place_detail.photos_json %}
+<div class="photo-gallery">
+    {% for photo_url in place_detail.photos_json %}
+    <img src="{{ photo_url }}" alt="{{ stop.title }} photo">
+    {% endfor %}
+</div>
+{% endif %}
+
+<div style="font-weight: 700; margin-bottom: 8px;">Google Rating: {{ place_detail.rating }} ★</div>
+
+{% for rev in place_detail.reviews_json %}
+<div class="review-item">
+    <div class="review-author">
+        <span>{{ rev.author }}</span>
+        <span>{{ rev.rating }} / 5</span>
+    </div>
+    <div class="review-text">{{ rev.text }}</div>
+</div>
+{% endfor %}

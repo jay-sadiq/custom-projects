@@ -1,0 +1,5 @@
+<label class="checklist-item {% if item.is_completed %}done{% endif %}">
+    <input type="checkbox" {% if item.is_completed %}checked{% endif %}
+           hx-post="{% url 'toggle_checklist_item' item.id %}" hx-swap="outerHTML">
+    <span>{{ item.item_text }}</span>
+</label>

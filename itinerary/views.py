@@ -21,8 +21,20 @@ from .permissions import (
     user_trips_queryset,
 )
 from .services.llm import LLMService
+from .services.mutations import MutationError, apply_stop_mutations
 
 logger = logging.getLogger(__name__)
+
+
+def _render_chat_messages(request, message, ai_message, trigger_refresh=False):
+    response = render(
+        request,
+        "itinerary/partials/chat_messages.html",
+        {"message": message, "ai_message": ai_message},
+    )
+    if trigger_refresh:
+        response["HX-Trigger"] = "refresh-stops"
+    return response
 
 def register_view(request):
     if request.user.is_authenticated:
@@ -216,17 +228,12 @@ def toggle_checklist_item(request, item_id):
     item = get_checklist_item_for_user(request.user, item_id)
     item.is_completed = not item.is_completed
     item.save()
-    
-    # Render checkbox partial
-    checked = "checked" if item.is_completed else ""
-    done_class = "done" if item.is_completed else ""
-    html = f"""
-    <label class="checklist-item {done_class}">
-        <input type="checkbox" {checked} hx-post="/checklist/toggle/{item.id}/" hx-swap="outerHTML">
-        <span>{item.item_text}</span>
-    </label>
-    """
-    return HttpResponse(html)
+
+    return render(
+        request,
+        "itinerary/partials/checklist_item_row.html",
+        {"item": item},
+    )
 
 @login_required
 def get_stops_json(request, trip_id, day_number):
@@ -280,51 +287,26 @@ def chat_edit(request, trip_id, day_number):
         mutations = LLMService.edit_agenda(current_stops, message)
     except Exception as e:
         logger.error(f"Error parsing edit command: {e}")
-        # Return AI message error bubble
-        return HttpResponse(f"""
-        <div class="chat-msg user">{message}</div>
-        <div class="chat-msg ai">⚠️ AI editing failed: {str(e)}</div>
-        """)
-        
-    # 3. Apply mutations inside DB transaction
-    try:
-        for mut in mutations:
-            action = mut.get('action')
-            stop_id = mut.get('stop_id')
-            fields = mut.get('fields', {})
-            
-            if action == 'DELETE' and stop_id:
-                StopBlock.objects.filter(id=stop_id, day=day).delete()
-            elif action == 'UPDATE' and stop_id:
-                StopBlock.objects.filter(id=stop_id, day=day).update(**fields)
-            elif action == 'CREATE':
-                # Generate a default sequence order if not specified
-                if 'sequence_order' not in fields:
-                    fields['sequence_order'] = day.stops.count() + 1
-                StopBlock.objects.create(day=day, **fields)
-        
-        # Re-index sequence order to enforce sequential flow 1..N
-        all_stops = list(day.stops.all().order_by('sequence_order'))
-        for order_idx, s in enumerate(all_stops):
-            if s.sequence_order != order_idx + 1:
-                s.sequence_order = order_idx + 1
-                s.save()
+        return _render_chat_messages(
+            request,
+            message,
+            f"⚠️ AI editing failed: {e}",
+        )
 
-        # Send response containing user message, ai feedback, and custom headers to trigger HTMX refreshes
-        response = HttpResponse(f"""
-        <div class="chat-msg user">{message}</div>
-        <div class="chat-msg ai">✓ Agenda updated! Reordered stops have been synchronized.</div>
-        """)
-        # Custom headers trigger client events in HTMX and Alpine.js
-        response['HX-Trigger'] = 'refresh-stops'
-        return response
-        
+    try:
+        apply_stop_mutations(day, mutations)
+        return _render_chat_messages(
+            request,
+            message,
+            "✓ Agenda updated! Reordered stops have been synchronized.",
+            trigger_refresh=True,
+        )
+    except MutationError as e:
+        logger.error(f"Error applying mutations: {e}")
+        return _render_chat_messages(request, message, f"⚠️ Error applying edits: {e}")
     except Exception as e:
         logger.error(f"Error applying mutations: {e}")
-        return HttpResponse(f"""
-        <div class="chat-msg user">{message}</div>
-        <div class="chat-msg ai">⚠️ Error applying edits: {str(e)}</div>
-        """)
+        return _render_chat_messages(request, message, f"⚠️ Error applying edits: {e}")
 
 @login_required
 def get_stop_reviews(request, stop_id):
@@ -387,29 +369,12 @@ def get_stop_reviews(request, stop_id):
                 "https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=400&q=80"
             ]
             place_detail.save()
-            
-    # Render reviews HTML fragment
-    reviews_html = ""
-    if place_detail.photos_json:
-        reviews_html += '<div class="photo-gallery">'
-        for photo_url in place_detail.photos_json:
-            reviews_html += f'<img src="{photo_url}" alt="{stop.title} photo">'
-        reviews_html += '</div>'
-        
-    reviews_html += f'<div style="font-weight: 700; margin-bottom: 8px;">Google Rating: {place_detail.rating} ★</div>'
-    
-    for rev in place_detail.reviews_json:
-        reviews_html += f"""
-        <div class="review-item">
-            <div class="review-author">
-                <span>{rev['author']}</span>
-                <span>{"★" * int(rev['rating'])}</span>
-            </div>
-            <div class="review-text">{rev['text']}</div>
-        </div>
-        """
-        
-    return HttpResponse(reviews_html)
+
+    return render(
+        request,
+        "itinerary/partials/stop_reviews.html",
+        {"stop": stop, "place_detail": place_detail},
+    )
 
 @login_required
 @require_POST
@@ -443,15 +408,12 @@ def parse_booking_pdf(request, trip_id):
             details=parsed_data.get('details', ''),
             cost=parsed_data.get('cost')
         )
-        
-        # Format HTML check item or card to display
-        html = f"""
-        <div class="cost-row" style="background: #ECFDF5; border: 1px solid #10B981; border-radius: 8px; padding: 10px; margin-top: 8px;">
-            <div style="font-weight: 700;">✅ {booking.booking_type} Imported: {booking.title}</div>
-            <div class="label">Ref: {booking.confirmation_number} | Details: {booking.details}</div>
-        </div>
-        """
-        return HttpResponse(html)
+
+        return render(
+            request,
+            "itinerary/partials/booking_imported.html",
+            {"booking": booking},
+        )
     except Exception as e:
         logger.error(f"Error parsing booking: {e}")
         return HttpResponse(f"Failed to parse booking: {e}", status=500)
