@@ -8,6 +8,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from itinerary.models import (
+    Booking,
     ChecklistItem,
     DayItinerary,
     StopBlock,
@@ -217,3 +218,36 @@ class APITripOwnershipTestCase(APITestCase):
         self.client.credentials(HTTP_AUTHORIZATION="Bearer invalid-token")
         response = self.client.get(reverse("trip-list"))
         self.assertEqual(response.status_code, 401)
+
+    def test_owner_can_list_stop_photos(self):
+        from itinerary.models import StopPhoto
+
+        StopPhoto.objects.create(
+            stop=self.stop,
+            image="stops/photos/test.jpg",
+        )
+        self._auth(self.owner)
+        response = self.client.get(reverse("stop-photos", args=[self.stop.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()), 1)
+
+    @patch("itinerary.api.views.LLMService.parse_booking")
+    def test_owner_can_import_booking_from_text(self, mock_parse):
+        mock_parse.return_value = {
+            "booking_type": "Flight",
+            "title": "BA123 to Lisbon",
+            "confirmation_number": "ABC123",
+            "details": "Window seat",
+            "start_time": None,
+            "end_time": None,
+            "cost": None,
+        }
+        self._auth(self.owner)
+        response = self.client.post(
+            reverse("trip-import-booking", args=[self.trip.id]),
+            {"text": "Flight BA123 confirmation ABC123"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["title"], "BA123 to Lisbon")
+        self.assertTrue(Booking.objects.filter(trip=self.trip).exists())

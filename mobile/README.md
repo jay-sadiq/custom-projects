@@ -31,27 +31,26 @@ flutter test
 
 ```
 lib/
-  config/env.dart              # API_BASE_URL dart-define
-  core/api/api_client.dart     # Dio + JWT refresh interceptor
-  core/storage/                # Secure token storage
-  features/auth/               # Login, register, Riverpod auth state
-  features/trips/              # Trip list, create, detail, map, checklist, chat
-  routing/app_router.dart      # go_router + auth guard
+  config/env.dart
+  core/api/                 # Dio + JWT refresh
+  core/cache/               # Hive offline read cache
+  core/network/             # Connectivity status
+  features/auth/
+  features/trips/           # List, create, detail, map, timeline, photos
+  routing/
 ```
-
-## Phase 10 — Foundation
-
-- Authenticated shell with login/register
-- JWT persisted in secure storage (survives app restart)
-- Routes: `/login`, `/register`, `/`, `/trips/create`, `/trips/:id/day/:n`
 
 ## Phase 11 — Core companion screens
 
-- **Trip list** — pull-to-refresh dashboard at `/`
-- **Create trip** — AI job polling via `POST /trips/` + `GET /trip-jobs/{id}/`
-- **Trip detail** — day chips, theme/banner/costs, OSM map (`flutter_map`), stops list
-- **Notes** — debounced `PATCH /days/{id}/`
-- **Checklist** — toggle via `POST /checklist-items/{id}/toggle/`
-- **AI chat edit** — bottom sheet calling `POST /days/{id}/chat-edit/`
+Trip list, AI create-trip, day map, stops, debounced notes, checklist toggle, and chat edit.
 
-Offline cache, camera upload, and weather widgets land in **Phase 12**.
+## Phase 12 — Offline, photos, parity widgets
+
+- **Offline cache** — Hive stores last-viewed trips/days/stops/checklist; orange banner when offline; edits disabled
+- **Camera upload** — `image_picker` → `POST /stops/{id}/photos/` with gallery on stop detail
+- **Weather chip** — `GET /days/{id}/weather/` in day header
+- **Reviews sheet** — `GET /stops/{id}/reviews/` from stop detail
+- **Timeline** — read-only vertical schedule sorted by `start_time_of_day`
+- **Booking import** — paste confirmation text → `POST /trips/{id}/bookings/import/`
+
+Store builds and flavors land in **Phase 13**.

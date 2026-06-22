@@ -42,6 +42,54 @@ void main() {
       expect(stop.latitude, 38.71);
       expect(stop.mealName, 'Pastéis');
     });
+
+    test('parses timeline times', () {
+      final stop = StopBlock.fromJson({
+        'id': 1,
+        'day_id': 1,
+        'sequence_order': 1,
+        'title': 'Lunch',
+        'start_time_of_day': '13:30:00',
+      });
+      expect(stop.timelineLabel, '1:30 PM');
+    });
+  });
+
+  group('sortStopsForTimeline', () {
+    test('orders by start_time_of_day when available', () {
+      final stops = [
+        StopBlock.fromJson({
+          'id': 2,
+          'day_id': 1,
+          'sequence_order': 2,
+          'title': 'Afternoon',
+          'start_time_of_day': '14:00:00',
+        }),
+        StopBlock.fromJson({
+          'id': 1,
+          'day_id': 1,
+          'sequence_order': 1,
+          'title': 'Morning',
+          'start_time_of_day': '09:00:00',
+        }),
+      ];
+      final sorted = sortStopsForTimeline(stops);
+      expect(sorted.first.title, 'Morning');
+    });
+  });
+
+  group('DayWeather.fromJson', () {
+    test('parses weather payload', () {
+      final weather = DayWeather.fromJson({
+        'label': 'Live Forecast',
+        'emoji': '☀️',
+        'temperature_c': 24.5,
+        'condition': 'Sunny',
+        'is_demo_data': false,
+      });
+      expect(weather.temperatureC, 24.5);
+      expect(weather.isDemoData, isFalse);
+    });
   });
 
   group('TripCreationJob.fromJson', () {

@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/network/connectivity_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/offline_banner.dart';
 import '../auth/auth_providers.dart';
 import 'trips_providers.dart';
 
@@ -14,6 +16,7 @@ class TripsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final trips = ref.watch(tripsListProvider);
     final health = ref.watch(apiHealthProvider);
+    final isOnline = ref.watch(isOnlineProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -51,7 +54,9 @@ class TripsScreen extends ConsumerWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/trips/create'),
+        onPressed: isOnline
+            ? () => context.push('/trips/create')
+            : () => showOfflineSnackBar(context),
         icon: const Icon(Icons.add),
         label: const Text('New trip'),
       ),

@@ -3,24 +3,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/widgets/offline_banner.dart';
-import '../trips_providers.dart';
 import '../trips_repository.dart';
 
-class ChatEditSheet extends ConsumerStatefulWidget {
-  const ChatEditSheet({
+class BookingImportSheet extends ConsumerStatefulWidget {
+  const BookingImportSheet({
     super.key,
-    required this.dayId,
     required this.tripId,
     required this.repository,
   });
 
-  final int dayId;
   final int tripId;
   final TripsRepository repository;
 
   static Future<void> show(
     BuildContext context, {
-    required int dayId,
     required int tripId,
     required TripsRepository repository,
   }) {
@@ -32,22 +28,18 @@ class ChatEditSheet extends ConsumerStatefulWidget {
         padding: EdgeInsets.only(
           bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
-        child: ChatEditSheet(
-          dayId: dayId,
-          tripId: tripId,
-          repository: repository,
-        ),
+        child: BookingImportSheet(tripId: tripId, repository: repository),
       ),
     );
   }
 
   @override
-  ConsumerState<ChatEditSheet> createState() => _ChatEditSheetState();
+  ConsumerState<BookingImportSheet> createState() => _BookingImportSheetState();
 }
 
-class _ChatEditSheetState extends ConsumerState<ChatEditSheet> {
+class _BookingImportSheetState extends ConsumerState<BookingImportSheet> {
   final _controller = TextEditingController();
-  bool _sending = false;
+  bool _submitting = false;
   String? _error;
   String? _success;
 
@@ -57,37 +49,36 @@ class _ChatEditSheetState extends ConsumerState<ChatEditSheet> {
     super.dispose();
   }
 
-  Future<void> _send() async {
+  Future<void> _submit() async {
     if (!ref.read(isOnlineProvider)) {
       showOfflineSnackBar(context);
       return;
     }
-    final message = _controller.text.trim();
-    if (message.isEmpty) return;
+
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
 
     setState(() {
-      _sending = true;
+      _submitting = true;
       _error = null;
       _success = null;
     });
 
     try {
-      final result = await widget.repository.chatEditDay(widget.dayId, message);
-      ref.invalidate(dayStopsProvider(widget.dayId));
-      ref.invalidate(tripDaysProvider(widget.tripId));
+      final booking = await widget.repository.importBooking(widget.tripId, text);
       if (mounted) {
         setState(() {
-          _success = result['summary'] as String? ?? 'Agenda updated.';
+          _success = 'Added booking: ${booking.title}';
           _controller.clear();
         });
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'Edit failed. Check API and try again.');
+        setState(() => _error = 'Could not import booking. Check text and try again.');
       }
     } finally {
       if (mounted) {
-        setState(() => _sending = false);
+        setState(() => _submitting = false);
       }
     }
   }
@@ -101,23 +92,21 @@ class _ChatEditSheetState extends ConsumerState<ChatEditSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'AI agenda edit',
+            'Import booking',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
           ),
           const SizedBox(height: 8),
           const Text(
-            'Try: “Add lunch near the old city” or “Move museum to afternoon”',
+            'Paste confirmation email or ticket text. AI will extract the booking details.',
           ),
           const SizedBox(height: 16),
           TextField(
             controller: _controller,
-            maxLines: 3,
-            textInputAction: TextInputAction.send,
-            onSubmitted: (_) => _sending ? null : _send(),
+            maxLines: 6,
             decoration: const InputDecoration(
-              hintText: 'Describe the change…',
+              hintText: 'Paste booking confirmation…',
               border: OutlineInputBorder(),
             ),
           ),
@@ -131,15 +120,15 @@ class _ChatEditSheetState extends ConsumerState<ChatEditSheet> {
           ],
           const SizedBox(height: 12),
           FilledButton.icon(
-            onPressed: _sending ? null : _send,
-            icon: _sending
+            onPressed: _submitting ? null : _submit,
+            icon: _submitting
                 ? const SizedBox(
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.auto_awesome),
-            label: const Text('Apply edit'),
+                : const Icon(Icons.flight_takeoff),
+            label: const Text('Import booking'),
           ),
         ],
       ),

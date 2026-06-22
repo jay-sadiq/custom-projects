@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from itinerary.models import (
+    Booking,
     ChecklistItem,
     DayItinerary,
     StopBlock,
@@ -24,9 +25,11 @@ from itinerary.services.mutations import MutationError, apply_stop_mutations
 from itinerary.services.reviews import get_stop_reviews_data
 from itinerary.services.trip_creation import run_trip_creation_job
 from itinerary.services.weather import get_weather_for_day
+from itinerary.services.booking_import import parse_booking_datetime
 from itinerary.validators import UploadValidationError, validate_image_upload
 
 from .serializers import (
+    BookingImportSerializer,
     BookingSerializer,
     ChatEditSerializer,
     ChecklistItemSerializer,
@@ -135,6 +138,38 @@ class TripViewSet(viewsets.ModelViewSet):
         trip = self.get_object()
         bookings = trip.bookings.all()
         return Response(BookingSerializer(bookings, many=True).data)
+
+    @action(detail=True, methods=["post"], url_path="bookings/import")
+    def import_booking(self, request, pk=None):
+        if _limited(request):
+            return ratelimit_response(request, as_json=True)
+        trip = self.get_object()
+        serializer = BookingImportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        text = serializer.validated_data["text"].strip()
+        if not text:
+            return Response({"detail": "No booking details provided."}, status=400)
+        try:
+            parsed_data = LLMService.parse_booking(text)
+            booking = Booking.objects.create(
+                trip=trip,
+                booking_type=parsed_data.get("booking_type", "Activity"),
+                title=parsed_data.get("title", "Booking confirmation"),
+                confirmation_number=parsed_data.get("confirmation_number", ""),
+                details=parsed_data.get("details", ""),
+                start_time=parse_booking_datetime(parsed_data.get("start_time")),
+                end_time=parse_booking_datetime(parsed_data.get("end_time")),
+                cost=parsed_data.get("cost"),
+            )
+            return Response(
+                BookingSerializer(booking).data,
+                status=status.HTTP_201_CREATED,
+            )
+        except LLMUnavailableError as exc:
+            return Response({"detail": str(exc)}, status=503)
+        except Exception as exc:
+            logger.error("API booking import failed: %s", exc)
+            return Response({"detail": f"Failed to parse booking: {exc}"}, status=500)
 
 
 class TripCreationJobViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
@@ -245,9 +280,16 @@ class StopViewSet(
         stop = self.get_object()
         return Response(get_stop_reviews_data(stop, request=request))
 
-    @action(detail=True, methods=["post"])
+    @action(detail=True, methods=["get", "post"])
     def photos(self, request, pk=None):
         stop = self.get_object()
+        if request.method == "GET":
+            photos = stop.user_photos.all()
+            return Response(
+                StopPhotoSerializer(
+                    photos, many=True, context={"request": request}
+                ).data
+            )
         photo_file = request.FILES.get("photo")
         if not photo_file:
             return Response({"detail": "No photo file provided."}, status=400)

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/connectivity_service.dart';
+import '../../../core/widgets/offline_banner.dart';
 import '../models/trip_models.dart';
 import '../trips_providers.dart';
 import '../trips_repository.dart';
@@ -50,6 +52,10 @@ class _DayNotesFieldState extends ConsumerState<DayNotesField> {
   }
 
   void _onChanged(String value) {
+    if (!ref.read(isOnlineProvider)) {
+      showOfflineSnackBar(context);
+      return;
+    }
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 600), () async {
       setState(() {
@@ -100,6 +106,7 @@ class _DayNotesFieldState extends ConsumerState<DayNotesField> {
             TextField(
               controller: _controller,
               onChanged: _onChanged,
+              readOnly: !ref.watch(isOnlineProvider),
               maxLines: 4,
               decoration: const InputDecoration(
                 hintText: 'Add notes for this day…',

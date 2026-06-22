@@ -1,26 +1,39 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../models/trip_models.dart';
+import '../trips_repository.dart';
+import 'stop_photos_section.dart';
+import 'stop_reviews_sheet.dart';
 import 'trip_map.dart';
 
-class StopDetailSheet extends StatelessWidget {
-  const StopDetailSheet({super.key, required this.stop});
+class StopDetailSheet extends ConsumerWidget {
+  const StopDetailSheet({
+    super.key,
+    required this.stop,
+    required this.repository,
+  });
 
   final StopBlock stop;
+  final TripsRepository repository;
 
-  static Future<void> show(BuildContext context, StopBlock stop) {
+  static Future<void> show(
+    BuildContext context, {
+    required StopBlock stop,
+    required TripsRepository repository,
+  }) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) => StopDetailSheet(stop: stop),
+      builder: (context) => StopDetailSheet(stop: stop, repository: repository),
     );
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
       padding: EdgeInsets.fromLTRB(
         20,
@@ -28,58 +41,72 @@ class StopDetailSheet extends StatelessWidget {
         20,
         20 + MediaQuery.viewPaddingOf(context).bottom,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            stop.title,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-          if (stop.timeLabel.isNotEmpty) ...[
-            const SizedBox(height: 4),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Text(
-              stop.timeLabel,
-              style: const TextStyle(color: AppColors.textSecondary),
+              stop.title,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
-          ],
-          if (stop.description.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(stop.description),
-          ],
-          if (stop.mealName.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(
-              stop.mealName,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            if (stop.mealDesc.isNotEmpty)
+            if (stop.timeLabel.isNotEmpty) ...[
+              const SizedBox(height: 4),
               Text(
-                stop.mealDesc,
+                stop.timeLabel,
                 style: const TextStyle(color: AppColors.textSecondary),
               ),
-          ],
-          if (stop.costLocal != null && stop.costLocal! > 0) ...[
-            const SizedBox(height: 12),
-            Text('Cost: ${stop.costLocal!.toStringAsFixed(2)}'),
-          ],
-          if (stop.hasCoordinates) ...[
+            ],
+            if (stop.description.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(stop.description),
+            ],
+            if (stop.mealName.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                stop.mealName,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              if (stop.mealDesc.isNotEmpty)
+                Text(
+                  stop.mealDesc,
+                  style: const TextStyle(color: AppColors.textSecondary),
+                ),
+            ],
+            if (stop.costLocal != null && stop.costLocal! > 0) ...[
+              const SizedBox(height: 12),
+              Text('Cost: ${stop.costLocal!.toStringAsFixed(2)}'),
+            ],
             const SizedBox(height: 16),
-            SizedBox(
-              height: 180,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: TripMap(
-                  stops: [stop],
-                  selectedStopId: stop.id,
-                  onStopTap: (_) {},
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => StopReviewsSheet.show(context, stop.id),
+                  icon: const Icon(Icons.reviews_outlined, size: 18),
+                  label: const Text('Reviews'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            StopPhotosSection(stopId: stop.id, repository: repository),
+            if (stop.hasCoordinates) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 180,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: TripMap(
+                    stops: [stop],
+                    selectedStopId: stop.id,
+                    onStopTap: (_) {},
+                  ),
                 ),
               ),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

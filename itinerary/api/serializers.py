@@ -203,6 +203,10 @@ class StopPhotoSerializer(serializers.ModelSerializer):
         return obj.image.url if obj.image else None
 
 
+class BookingImportSerializer(serializers.Serializer):
+    text = serializers.CharField()
+
+
 class ChatEditSerializer(serializers.Serializer):
     message = serializers.CharField()
 

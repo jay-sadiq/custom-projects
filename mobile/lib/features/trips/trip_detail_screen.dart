@@ -3,13 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/network/connectivity_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/offline_banner.dart';
 import 'models/trip_models.dart';
 import 'trips_providers.dart';
+import 'widgets/booking_import_sheet.dart';
 import 'widgets/chat_edit_sheet.dart';
 import 'widgets/checklist_section.dart';
 import 'widgets/day_notes_field.dart';
+import 'widgets/day_weather_chip.dart';
 import 'widgets/stop_detail_sheet.dart';
+import 'widgets/stop_timeline.dart';
 import 'widgets/trip_map.dart';
 
 class TripDetailScreen extends ConsumerWidget {
@@ -29,8 +34,9 @@ class TripDetailScreen extends ConsumerWidget {
     final tripAsync = ref.watch(tripDetailProvider(_tripIdInt));
     final daysAsync = ref.watch(tripDaysProvider(_tripIdInt));
     final repository = ref.watch(tripsRepositoryProvider);
+    final isOnline = ref.watch(isOnlineProvider);
 
-    return Scaffold(
+    return OfflineAwareScaffold(
       appBar: AppBar(
         title: tripAsync.when(
           data: (trip) => Text(
@@ -44,11 +50,24 @@ class TripDetailScreen extends ConsumerWidget {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/'),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Import booking',
+            onPressed: isOnline
+                ? () => BookingImportSheet.show(
+                      context,
+                      tripId: _tripIdInt,
+                      repository: repository,
+                    )
+                : () => showOfflineSnackBar(context),
+            icon: const Icon(Icons.flight_takeoff),
+          ),
+        ],
       ),
       floatingActionButton: daysAsync.maybeWhen(
         data: (days) {
           final day = _findDay(days);
-          if (day == null) return null;
+          if (day == null || !isOnline) return null;
           return FloatingActionButton.extended(
             onPressed: () => ChatEditSheet.show(
               context,
@@ -72,10 +91,12 @@ class TripDetailScreen extends ConsumerWidget {
 
           return RefreshIndicator(
             onRefresh: () async {
+              if (!isOnline) return;
               ref.invalidate(tripDetailProvider(_tripIdInt));
               ref.invalidate(tripDaysProvider(_tripIdInt));
               ref.invalidate(dayStopsProvider(day.id));
               ref.invalidate(tripChecklistProvider(_tripIdInt));
+              ref.invalidate(dayWeatherProvider(day.id));
             },
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
@@ -87,6 +108,8 @@ class TripDetailScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 _DayHeader(day: day),
+                const SizedBox(height: 12),
+                DayWeatherChip(dayId: day.id),
                 const SizedBox(height: 16),
                 SizedBox(
                   height: 240,
@@ -95,8 +118,11 @@ class TripDetailScreen extends ConsumerWidget {
                     child: stopsAsync.when(
                       data: (stops) => TripMap(
                         stops: stops,
-                        onStopTap: (stop) =>
-                            StopDetailSheet.show(context, stop),
+                        onStopTap: (stop) => StopDetailSheet.show(
+                          context,
+                          stop: stop,
+                          repository: repository,
+                        ),
                       ),
                       loading: () =>
                           const Center(child: CircularProgressIndicator()),
@@ -110,9 +136,13 @@ class TripDetailScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 stopsAsync.when(
-                  data: (stops) => _StopsList(
+                  data: (stops) => StopTimeline(
                     stops: stops,
-                    onStopTap: (stop) => StopDetailSheet.show(context, stop),
+                    onStopTap: (stop) => StopDetailSheet.show(
+                      context,
+                      stop: stop,
+                      repository: repository,
+                    ),
                   ),
                   loading: () => const Card(
                     child: Padding(
@@ -128,6 +158,19 @@ class TripDetailScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
+                stopsAsync.when(
+                  data: (stops) => _StopsList(
+                    stops: stops,
+                    onStopTap: (stop) => StopDetailSheet.show(
+                      context,
+                      stop: stop,
+                      repository: repository,
+                    ),
+                  ),
+                  loading: () => const SizedBox.shrink(),
+                  error: (error, stackTrace) => const SizedBox.shrink(),
+                ),
+                const SizedBox(height: 16),
                 DayNotesField(day: day, repository: repository),
                 const SizedBox(height: 16),
                 ChecklistSection(tripId: _tripIdInt, repository: repository),
@@ -136,7 +179,8 @@ class TripDetailScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => const Center(child: Text('Could not load trip days')),
+        error: (error, stackTrace) =>
+            const Center(child: Text('Could not load trip days')),
       ),
     );
   }
@@ -274,7 +318,7 @@ class _StopsList extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: Text(
-                'Stops',
+                'All stops',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/connectivity_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/offline_banner.dart';
 import '../models/trip_models.dart';
 import '../trips_providers.dart';
 import '../trips_repository.dart';
@@ -19,6 +21,7 @@ class ChecklistSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final checklist = ref.watch(tripChecklistProvider(tripId));
+    final isOnline = ref.watch(isOnlineProvider);
 
     return Card(
       child: Padding(
@@ -63,10 +66,12 @@ class ChecklistSection extends ConsumerWidget {
                         CheckboxListTile(
                           contentPadding: EdgeInsets.zero,
                           value: item.isCompleted,
-                          onChanged: (_) async {
-                            await repository.toggleChecklistItem(item.id);
-                            ref.invalidate(tripChecklistProvider(tripId));
-                          },
+                          onChanged: isOnline
+                              ? (_) async {
+                                  await repository.toggleChecklistItem(item.id);
+                                  ref.invalidate(tripChecklistProvider(tripId));
+                                }
+                              : (_) => showOfflineSnackBar(context),
                           title: Text(
                             item.itemText,
                             style: TextStyle(

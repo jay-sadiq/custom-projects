@@ -1,11 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/network/connectivity_service.dart';
 import '../auth/auth_providers.dart';
 import 'models/trip_models.dart';
 import 'trips_repository.dart';
 
 final tripsRepositoryProvider = Provider<TripsRepository>((ref) {
-  return TripsRepository(apiClient: ref.watch(apiClientProvider));
+  return TripsRepository(
+    apiClient: ref.watch(apiClientProvider),
+    onlineStatus: ref.watch(isOnlineProvider.notifier),
+  );
 });
 
 final tripsListProvider = FutureProvider.autoDispose<List<Trip>>((ref) async {
@@ -30,6 +34,21 @@ final dayStopsProvider =
 final tripChecklistProvider =
     FutureProvider.autoDispose.family<List<ChecklistItem>, int>((ref, tripId) async {
   return ref.watch(tripsRepositoryProvider).fetchChecklist(tripId);
+});
+
+final dayWeatherProvider =
+    FutureProvider.autoDispose.family<DayWeather, int>((ref, dayId) async {
+  return ref.watch(tripsRepositoryProvider).fetchDayWeather(dayId);
+});
+
+final stopPhotosProvider =
+    FutureProvider.autoDispose.family<List<StopPhoto>, int>((ref, stopId) async {
+  return ref.watch(tripsRepositoryProvider).fetchStopPhotos(stopId);
+});
+
+final stopReviewsProvider =
+    FutureProvider.autoDispose.family<StopReviewsData, int>((ref, stopId) async {
+  return ref.watch(tripsRepositoryProvider).fetchStopReviews(stopId);
 });
 
 class CreateTripState {

@@ -110,6 +110,8 @@ class StopBlock {
     this.mealName = '',
     this.mealDesc = '',
     this.colorHex = '#8B1A1A',
+    this.startTimeOfDay,
+    this.endTimeOfDay,
   });
 
   final int id;
@@ -127,8 +129,17 @@ class StopBlock {
   final String mealName;
   final String mealDesc;
   final String colorHex;
+  final String? startTimeOfDay;
+  final String? endTimeOfDay;
 
   bool get hasCoordinates => latitude != 0 || longitude != 0;
+
+  String get timelineLabel {
+    if (startTimeOfDay != null && startTimeOfDay!.isNotEmpty) {
+      return formatTimeOfDay(startTimeOfDay!);
+    }
+    return timeLabel;
+  }
 
   factory StopBlock.fromJson(Map<String, dynamic> json) {
     return StopBlock(
@@ -147,6 +158,181 @@ class StopBlock {
       mealName: json['meal_name'] as String? ?? '',
       mealDesc: json['meal_desc'] as String? ?? '',
       colorHex: json['color_hex'] as String? ?? '#8B1A1A',
+      startTimeOfDay: json['start_time_of_day'] as String?,
+      endTimeOfDay: json['end_time_of_day'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'day_id': dayId,
+        'sequence_order': sequenceOrder,
+        'time_label': timeLabel,
+        'title': title,
+        'description': description,
+        'latitude': latitude,
+        'longitude': longitude,
+        'zoom_level': zoomLevel,
+        'cost_local': costLocal,
+        'cost_usd': costUsd,
+        'meal_type': mealType,
+        'meal_name': mealName,
+        'meal_desc': mealDesc,
+        'color_hex': colorHex,
+        'start_time_of_day': startTimeOfDay,
+        'end_time_of_day': endTimeOfDay,
+      };
+}
+
+String formatTimeOfDay(String value) {
+  final parts = value.split(':');
+  if (parts.length < 2) return value;
+  final hour = int.tryParse(parts[0]) ?? 0;
+  final minute = int.tryParse(parts[1]) ?? 0;
+  final period = hour >= 12 ? 'PM' : 'AM';
+  final hour12 = hour % 12 == 0 ? 12 : hour % 12;
+  return '$hour12:${minute.toString().padLeft(2, '0')} $period';
+}
+
+List<StopBlock> sortStopsForTimeline(List<StopBlock> stops) {
+  final copy = List<StopBlock>.from(stops);
+  copy.sort((a, b) {
+    final aTime = a.startTimeOfDay ?? '';
+    final bTime = b.startTimeOfDay ?? '';
+    if (aTime.isNotEmpty && bTime.isNotEmpty) {
+      return aTime.compareTo(bTime);
+    }
+    if (aTime.isNotEmpty) return -1;
+    if (bTime.isNotEmpty) return 1;
+    return a.sequenceOrder.compareTo(b.sequenceOrder);
+  });
+  return copy;
+}
+
+class DayWeather {
+  const DayWeather({
+    required this.label,
+    required this.emoji,
+    required this.temperatureC,
+    required this.condition,
+    this.isDemoData = false,
+  });
+
+  final String label;
+  final String emoji;
+  final double temperatureC;
+  final String condition;
+  final bool isDemoData;
+
+  factory DayWeather.fromJson(Map<String, dynamic> json) {
+    return DayWeather(
+      label: json['label'] as String? ?? '',
+      emoji: json['emoji'] as String? ?? '',
+      temperatureC: parseApiDouble(json['temperature_c']) ?? 0,
+      condition: json['condition'] as String? ?? '',
+      isDemoData: json['is_demo_data'] as bool? ?? false,
+    );
+  }
+}
+
+class StopPhoto {
+  const StopPhoto({
+    required this.id,
+    required this.stopId,
+    required this.imageUrl,
+  });
+
+  final int id;
+  final int stopId;
+  final String imageUrl;
+
+  factory StopPhoto.fromJson(Map<String, dynamic> json) {
+    return StopPhoto(
+      id: parseApiInt(json['id']),
+      stopId: parseApiInt(json['stop_id']),
+      imageUrl: json['image_url'] as String? ?? '',
+    );
+  }
+}
+
+class StopReview {
+  const StopReview({
+    required this.author,
+    required this.rating,
+    required this.text,
+  });
+
+  final String author;
+  final double rating;
+  final String text;
+
+  factory StopReview.fromJson(Map<String, dynamic> json) {
+    return StopReview(
+      author: json['author'] as String? ?? json['author_name'] as String? ?? 'Guest',
+      rating: parseApiDouble(json['rating']) ?? 0,
+      text: json['text'] as String? ?? '',
+    );
+  }
+}
+
+class StopReviewsData {
+  const StopReviewsData({
+    required this.stopId,
+    required this.rating,
+    required this.reviews,
+    required this.photoUrls,
+    this.isDemoData = false,
+  });
+
+  final int stopId;
+  final double rating;
+  final List<StopReview> reviews;
+  final List<String> photoUrls;
+  final bool isDemoData;
+
+  factory StopReviewsData.fromJson(Map<String, dynamic> json) {
+    final reviews = (json['reviews'] as List<dynamic>? ?? [])
+        .cast<Map<String, dynamic>>()
+        .map(StopReview.fromJson)
+        .toList();
+    final photoUrls = (json['photo_urls'] as List<dynamic>? ?? [])
+        .map((item) => item.toString())
+        .toList();
+    return StopReviewsData(
+      stopId: parseApiInt(json['stop_id']),
+      rating: parseApiDouble(json['rating']) ?? 0,
+      reviews: reviews,
+      photoUrls: photoUrls,
+      isDemoData: json['is_demo_data'] as bool? ?? false,
+    );
+  }
+}
+
+class Booking {
+  const Booking({
+    required this.id,
+    required this.tripId,
+    required this.title,
+    this.bookingType = '',
+    this.confirmationNumber = '',
+    this.details = '',
+  });
+
+  final int id;
+  final int tripId;
+  final String title;
+  final String bookingType;
+  final String confirmationNumber;
+  final String details;
+
+  factory Booking.fromJson(Map<String, dynamic> json) {
+    return Booking(
+      id: parseApiInt(json['id']),
+      tripId: parseApiInt(json['trip_id']),
+      title: json['title'] as String? ?? '',
+      bookingType: json['booking_type'] as String? ?? '',
+      confirmationNumber: json['confirmation_number'] as String? ?? '',
+      details: json['details'] as String? ?? '',
     );
   }
 }
