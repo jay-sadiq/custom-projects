@@ -206,3 +206,72 @@ class TripCreationJob(models.Model):
     def __str__(self):
         return f"Trip job {self.id} ({self.status})"
 
+
+def generate_email_import_token() -> str:
+    import secrets
+
+    return secrets.token_urlsafe(16)
+
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+    email_import_token = models.CharField(
+        max_length=64,
+        unique=True,
+        default=generate_email_import_token,
+        help_text="Opaque token for trips+{token}@ inbound email address",
+    )
+
+    def __str__(self):
+        return f"Profile for {self.user.username}"
+
+
+class BookingImportDraft(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_CONFIRMED = "confirmed"
+    STATUS_REJECTED = "rejected"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending review"),
+        (STATUS_CONFIRMED, "Confirmed"),
+        (STATUS_REJECTED, "Rejected"),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="booking_import_drafts")
+    suggested_trip = models.ForeignKey(
+        Trip,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="suggested_booking_drafts",
+    )
+    confirmed_trip = models.ForeignKey(
+        Trip,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="confirmed_booking_drafts",
+    )
+    booking = models.ForeignKey(
+        Booking,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="import_drafts",
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    source = models.CharField(max_length=40, default="paste", help_text="paste | email | pdf")
+    source_subject = models.CharField(max_length=255, blank=True)
+    source_from = models.CharField(max_length=255, blank=True)
+    raw_text = models.TextField()
+    parsed_json = models.JSONField(default=dict, blank=True)
+    error_message = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        title = self.parsed_json.get("title") if isinstance(self.parsed_json, dict) else None
+        return f"Import draft {self.id} ({self.status}): {title or self.source_subject or 'untitled'}"
+

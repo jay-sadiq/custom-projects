@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     Booking,
+    BookingImportDraft,
     ChecklistItem,
     DayItinerary,
     PlaceDetail,
@@ -10,6 +11,7 @@ from .models import (
     Trip,
     TripAttendee,
     TripCreationJob,
+    UserProfile,
 )
 
 
@@ -79,3 +81,18 @@ class TripCreationJobAdmin(admin.ModelAdmin):
     list_filter = ("status", "created_at")
     search_fields = ("destination", "user__username")
     raw_id_fields = ("user", "trip")
+
+
+@admin.register(UserProfile)
+class UserProfileAdmin(admin.ModelAdmin):
+    list_display = ("user", "email_import_token")
+    search_fields = ("user__username", "email_import_token")
+    raw_id_fields = ("user",)
+
+
+@admin.register(BookingImportDraft)
+class BookingImportDraftAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "status", "source", "source_subject", "created_at")
+    list_filter = ("status", "source", "created_at")
+    search_fields = ("source_subject", "source_from", "user__username")
+    raw_id_fields = ("user", "suggested_trip", "confirmed_trip", "booking")

@@ -131,7 +131,7 @@ class QueryOptimizationTestCase(TestCase):
                 cost_local=5.0,
             )
 
-        with self.assertNumQueries(3):
+        with self.assertNumQueries(9):
             response = self.client.get(reverse("dashboard"))
         self.assertEqual(response.status_code, 200)
 

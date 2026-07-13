@@ -12,6 +12,9 @@
         </a>
         
         <div class="topnav-user">
+            <a href="{% url 'booking_imports_inbox' %}" class="logout-btn" style="margin-right: 8px;">
+                Bookings{% if pending_import_count %} ({{ pending_import_count }}){% endif %}
+            </a>
             <span class="welcome-msg">Welcome, <strong>{{ request.user.username }}</strong></span>
             <a href="{% url 'logout' %}" class="logout-btn">Logout</a>
         </div>
@@ -22,6 +25,14 @@
         <h1>🌍 AI Itinerary Travel Planner</h1>
         <p>Generate highly engaging, fully interactive day-by-day travel itineraries customized with local maps, budgets, checklists, weather, and AI agenda updates.</p>
         <a href="#" class="dashboard-btn-create" onclick="toggleModal(true)">✨ Create New AI Itinerary</a>
+    </div>
+
+    <div style="background: rgba(255,255,255,0.85); border: 1px solid var(--color-border); border-radius: 12px; padding: 14px 18px; margin-bottom: 24px;">
+        <strong>Email booking import:</strong>
+        Forward confirmations to
+        <code style="user-select: all;">{{ forwarding_address }}</code>
+        then review them in
+        <a href="{% url 'booking_imports_inbox' %}">Bookings inbox</a>.
     </div>
 
     <!-- Active Trips List -->

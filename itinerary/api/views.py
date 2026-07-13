@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from itinerary.models import (
     Booking,
+    BookingImportDraft,
     ChecklistItem,
     DayItinerary,
     StopBlock,
@@ -25,10 +26,21 @@ from itinerary.services.mutations import MutationError, apply_stop_mutations
 from itinerary.services.reviews import get_stop_reviews_data
 from itinerary.services.trip_creation import run_trip_creation_job
 from itinerary.services.weather import get_weather_for_day
-from itinerary.services.booking_import import parse_booking_datetime
+from itinerary.services.booking_import import (
+    confirm_import_draft,
+    create_import_draft,
+    forwarding_address_for,
+    get_or_create_profile,
+    parse_booking_datetime,
+    process_inbound_email,
+    reject_import_draft,
+)
 from itinerary.validators import UploadValidationError, validate_image_upload
 
 from .serializers import (
+    BookingImportConfirmSerializer,
+    BookingImportDraftSerializer,
+    BookingImportPreviewSerializer,
     BookingImportSerializer,
     BookingSerializer,
     ChatEditSerializer,
@@ -326,3 +338,178 @@ class StopPhotoViewSet(mixins.DestroyModelMixin, viewsets.GenericViewSet):
 
     def get_queryset(self):
         return StopPhoto.objects.filter(stop__day__trip__user=self.request.user)
+
+
+class BookingImportProfileView(APIView):
+    """Return the user's unique booking forwarding address."""
+
+    def get(self, request):
+        get_or_create_profile(request.user)
+        return Response(
+            {
+                "forwarding_address": forwarding_address_for(request.user),
+                "domain": settings.BOOKING_IMPORT_EMAIL_DOMAIN,
+            }
+        )
+
+
+class BookingImportDraftViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    serializer_class = BookingImportDraftSerializer
+
+    def get_queryset(self):
+        qs = BookingImportDraft.objects.filter(user=self.request.user).select_related(
+            "suggested_trip", "confirmed_trip", "booking"
+        )
+        status_filter = self.request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        return qs
+
+    @action(detail=False, methods=["post"])
+    def preview(self, request):
+        """Parse pasted text into a pending draft for review (does not save Booking yet)."""
+        if _limited(request):
+            return ratelimit_response(request, as_json=True)
+        serializer = BookingImportPreviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        trip = None
+        trip_id = data.get("trip_id")
+        if trip_id:
+            trip = Trip.objects.filter(id=trip_id, user=request.user).first()
+            if trip is None:
+                return Response({"detail": "Trip not found."}, status=404)
+        draft = create_import_draft(
+            user=request.user,
+            raw_text=data["text"],
+            source="paste",
+            trip=trip,
+        )
+        return Response(
+            BookingImportDraftSerializer(draft).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=False, methods=["post"], url_path="confirm")
+    def confirm(self, request):
+        serializer = BookingImportConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        draft = BookingImportDraft.objects.filter(
+            id=data["draft_id"], user=request.user
+        ).first()
+        if draft is None:
+            return Response({"detail": "Draft not found."}, status=404)
+        trip = Trip.objects.filter(id=data["trip_id"], user=request.user).first()
+        if trip is None:
+            return Response({"detail": "Trip not found."}, status=404)
+        overrides = {
+            key: data[key]
+            for key in (
+                "booking_type",
+                "title",
+                "confirmation_number",
+                "details",
+                "start_time",
+                "end_time",
+                "cost",
+            )
+            if key in data
+        }
+        try:
+            booking = confirm_import_draft(draft, trip=trip, overrides=overrides or None)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=400)
+        return Response(
+            {
+                "draft": BookingImportDraftSerializer(draft).data,
+                "booking": BookingSerializer(booking).data,
+            }
+        )
+
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
+        draft = self.get_object()
+        try:
+            reject_import_draft(draft)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=400)
+        return Response(BookingImportDraftSerializer(draft).data)
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def inbound_email_webhook(request):
+    """
+    Provider-agnostic inbound email webhook.
+
+    Accepts:
+    - multipart/form: `email` (raw MIME) or `text` + `to`/`recipient`
+    - JSON: `{ "raw": "...", "to": "trips+token@domain" }` or `{ "text": "...", "to": "..." }`
+    Optional header: `X-Webhook-Secret` must match INBOUND_EMAIL_WEBHOOK_SECRET when set.
+    """
+    secret = settings.INBOUND_EMAIL_WEBHOOK_SECRET
+    if secret:
+        provided = request.headers.get("X-Webhook-Secret", "")
+        if provided != secret:
+            return Response({"detail": "Invalid webhook secret."}, status=403)
+    elif not settings.DEBUG:
+        return Response(
+            {"detail": "INBOUND_EMAIL_WEBHOOK_SECRET must be configured."},
+            status=503,
+        )
+
+    raw = request.FILES.get("email") or request.data.get("raw") or request.data.get("email")
+    recipient = (
+        request.data.get("to")
+        or request.data.get("recipient")
+        or request.data.get("envelope_to")
+        or ""
+    )
+    if hasattr(raw, "read"):
+        raw_bytes = raw.read()
+    elif isinstance(raw, str) and raw.strip():
+        raw_bytes = raw.encode("utf-8")
+    else:
+        raw_bytes = None
+
+    try:
+        if raw_bytes:
+            draft = process_inbound_email(
+                raw_email=raw_bytes,
+                recipient_override=recipient,
+            )
+        else:
+            text = (request.data.get("text") or request.data.get("body") or "").strip()
+            if not text:
+                return Response({"detail": "No email content provided."}, status=400)
+            if not recipient:
+                return Response({"detail": "Recipient address required."}, status=400)
+            from itinerary.services.booking_import import resolve_user_from_recipient
+
+            user = resolve_user_from_recipient(recipient)
+            if user is None:
+                return Response({"detail": "Unknown forwarding address."}, status=404)
+            draft = create_import_draft(
+                user=user,
+                raw_text=text,
+                source="email",
+                source_subject=request.data.get("subject", ""),
+                source_from=request.data.get("from", ""),
+            )
+    except LookupError as exc:
+        return Response({"detail": str(exc)}, status=404)
+    except ValueError as exc:
+        return Response({"detail": str(exc)}, status=400)
+    except Exception as exc:
+        logger.exception("Inbound email processing failed")
+        return Response({"detail": f"Import failed: {exc}"}, status=500)
+
+    return Response(
+        BookingImportDraftSerializer(draft).data,
+        status=status.HTTP_201_CREATED,
+    )

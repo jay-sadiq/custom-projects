@@ -98,8 +98,125 @@ def logout_view(request):
 
 @login_required
 def dashboard(request):
+    from itinerary.models import BookingImportDraft
+    from itinerary.services.booking_import import forwarding_address_for, get_or_create_profile
+
+    get_or_create_profile(request.user)
     trips = dashboard_trips_for_user(request.user)
-    return render(request, 'itinerary/dashboard.html', {'trips': trips})
+    pending_imports = BookingImportDraft.objects.filter(
+        user=request.user,
+        status=BookingImportDraft.STATUS_PENDING,
+    ).count()
+    return render(
+        request,
+        "itinerary/dashboard.html",
+        {
+            "trips": trips,
+            "forwarding_address": forwarding_address_for(request.user),
+            "pending_import_count": pending_imports,
+        },
+    )
+
+
+@login_required
+def booking_imports_inbox(request):
+    from itinerary.models import BookingImportDraft
+    from itinerary.services.booking_import import forwarding_address_for, get_or_create_profile
+
+    get_or_create_profile(request.user)
+    drafts = (
+        BookingImportDraft.objects.filter(user=request.user)
+        .select_related("suggested_trip", "confirmed_trip", "booking")
+        .order_by("-created_at")[:50]
+    )
+    trips = dashboard_trips_for_user(request.user)
+    return render(
+        request,
+        "itinerary/booking_imports.html",
+        {
+            "drafts": drafts,
+            "trips": trips,
+            "forwarding_address": forwarding_address_for(request.user),
+        },
+    )
+
+
+@login_required
+@require_POST
+def booking_import_preview(request):
+    """Paste text → pending draft (review before save)."""
+    from itinerary.services.booking_import import create_import_draft
+
+    if not enforce_ai_rate_limit(request):
+        return ratelimit_response(request)
+    text = (request.POST.get("paste_text") or "").strip()
+    if not text:
+        return HttpResponse("Paste booking confirmation text first.", status=400)
+    trip_id = request.POST.get("trip_id")
+    trip = None
+    if trip_id:
+        trip = get_trip_for_user(request.user, trip_id)
+    draft = create_import_draft(
+        user=request.user,
+        raw_text=text,
+        source="paste",
+        trip=trip,
+    )
+    return render(
+        request,
+        "itinerary/partials/booking_import_draft_card.html",
+        {"draft": draft, "trips": dashboard_trips_for_user(request.user)},
+    )
+
+
+@login_required
+@require_POST
+def booking_import_confirm(request, draft_id):
+    from itinerary.models import BookingImportDraft
+    from itinerary.services.booking_import import confirm_import_draft
+
+    draft = get_object_or_404(
+        BookingImportDraft, id=draft_id, user=request.user
+    )
+    trip_id = request.POST.get("trip_id")
+    if not trip_id:
+        return HttpResponse("Select a trip before confirming.", status=400)
+    trip = get_trip_for_user(request.user, trip_id)
+    overrides = {
+        "title": request.POST.get("title") or None,
+        "booking_type": request.POST.get("booking_type") or None,
+        "confirmation_number": request.POST.get("confirmation_number") or None,
+        "details": request.POST.get("details") or None,
+    }
+    overrides = {k: v for k, v in overrides.items() if v}
+    try:
+        booking = confirm_import_draft(draft, trip=trip, overrides=overrides or None)
+    except ValueError as exc:
+        return HttpResponse(str(exc), status=400)
+    return render(
+        request,
+        "itinerary/partials/booking_imported.html",
+        {"booking": booking},
+    )
+
+
+@login_required
+@require_POST
+def booking_import_reject(request, draft_id):
+    from itinerary.models import BookingImportDraft
+    from itinerary.services.booking_import import reject_import_draft
+
+    draft = get_object_or_404(
+        BookingImportDraft, id=draft_id, user=request.user
+    )
+    try:
+        reject_import_draft(draft)
+    except ValueError as exc:
+        return HttpResponse(str(exc), status=400)
+    return HttpResponse(
+        '<div class="cost-row" style="opacity:0.7;">Rejected import draft.</div>'
+    )
+
 
 @login_required
 @require_POST

@@ -1,0 +1,72 @@
+<div class="trip-card" style="margin-bottom: 14px;" id="draft-{{ draft.id }}">
+    <div class="trip-card-header">
+        <div class="trip-card-title">
+            {% if draft.parsed_json.title %}{{ draft.parsed_json.title }}{% elif draft.source_subject %}{{ draft.source_subject }}{% else %}Import #{{ draft.id }}{% endif %}
+        </div>
+        <div class="trip-card-meta">
+            {{ draft.source|upper }} · {{ draft.status }} · {{ draft.created_at|date:"M d, Y g:i A" }}
+            {% if draft.source_from %}· from {{ draft.source_from }}{% endif %}
+        </div>
+    </div>
+    <div class="trip-card-body">
+        {% if draft.error_message %}
+        <p style="color: #b91c1c;">{{ draft.error_message }}</p>
+        {% endif %}
+        {% if draft.parsed_json %}
+        <div class="trip-card-stat">
+            <span class="label">Type</span>
+            <strong>{{ draft.parsed_json.booking_type|default:"—" }}</strong>
+        </div>
+        <div class="trip-card-stat">
+            <span class="label">Confirmation</span>
+            <strong>{{ draft.parsed_json.confirmation_number|default:"—" }}</strong>
+        </div>
+        <div class="trip-card-stat">
+            <span class="label">Suggested trip</span>
+            <strong>{% if draft.suggested_trip %}{{ draft.suggested_trip.title }}{% else %}None{% endif %}</strong>
+        </div>
+        {% if draft.parsed_json.details %}
+        <p style="font-size: 0.88rem; color: var(--color-text-secondary); margin-top: 8px;">
+            {{ draft.parsed_json.details|truncatechars:180 }}
+        </p>
+        {% endif %}
+        {% endif %}
+    </div>
+
+    {% if draft.status == "pending" %}
+    <form
+        style="padding: 12px 16px; display: flex; gap: 8px; flex-wrap: wrap; align-items: end;"
+        hx-post="{% url 'booking_import_confirm' draft.id %}"
+        hx-target="#draft-{{ draft.id }}"
+        hx-swap="outerHTML"
+    >
+        {% csrf_token %}
+        <div class="form-group" style="margin: 0; flex: 1; min-width: 180px;">
+            <label class="form-label">Assign to trip</label>
+            <select name="trip_id" class="form-input" required>
+                {% for trip in trips %}
+                <option value="{{ trip.id }}" {% if draft.suggested_trip_id == trip.id %}selected{% endif %}>
+                    {{ trip.title }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <input type="hidden" name="title" value="{{ draft.parsed_json.title|default:'' }}">
+        <input type="hidden" name="booking_type" value="{{ draft.parsed_json.booking_type|default:'Activity' }}">
+        <input type="hidden" name="confirmation_number" value="{{ draft.parsed_json.confirmation_number|default:'' }}">
+        <button type="submit" class="btn-nav primary">Confirm</button>
+        <button
+            type="button"
+            class="btn-nav"
+            hx-post="{% url 'booking_import_reject' draft.id %}"
+            hx-target="#draft-{{ draft.id }}"
+            hx-swap="outerHTML"
+            hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+        >Reject</button>
+    </form>
+    {% elif draft.status == "confirmed" and draft.booking %}
+    <div style="padding: 12px 16px;">
+        {% include 'itinerary/partials/booking_imported.html' with booking=draft.booking %}
+    </div>
+    {% endif %}
+</div>

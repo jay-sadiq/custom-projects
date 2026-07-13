@@ -51,6 +51,12 @@ JWT authentication for mobile and integrations. Web HTMX UI continues to use ses
 | `GET /api/v1/days/{id}/weather/` | Weather JSON |
 | `POST /api/v1/days/{id}/chat-edit/` | AI agenda edit |
 | `GET /api/v1/stops/{id}/reviews/` | Place reviews JSON |
+| `GET /api/v1/bookings/import/address/` | Unique `trips+{token}@…` forwarding address |
+| `POST /api/v1/bookings/import/drafts/preview/` | Parse text → pending draft (review before save) |
+| `GET /api/v1/bookings/import/drafts/` | List import drafts (`?status=pending`) |
+| `POST /api/v1/bookings/import/drafts/confirm/` | Confirm draft onto a trip |
+| `POST /api/v1/bookings/import/drafts/{id}/reject/` | Reject draft |
+| `POST /api/v1/webhooks/inbound-email/` | Inbound MIME/text webhook (secret required in prod) |
 
 Example:
 
@@ -147,6 +153,23 @@ flutter run --flavor dev --dart-define-from-file=config/dev.json
 Android emulator: add `--dart-define=API_BASE_URL=http://10.0.2.2:8000`.
 
 See [`mobile/README.md`](mobile/README.md) for flavors, structure, and CI.
+
+## Booking email import (Phase 14)
+
+Each user gets a unique forwarding address shown on the dashboard and at
+`GET /api/v1/bookings/import/address/` — format `trips+{token}@{BOOKING_IMPORT_EMAIL_DOMAIN}`.
+
+1. Point your inbound email provider (Mailgun/SendGrid/Postmark inbound parse) at
+   `POST /api/v1/webhooks/inbound-email/` with header `X-Webhook-Secret`.
+2. Body: raw MIME in `raw`/`email`, or JSON `{ "text": "...", "to": "trips+token@…" }`.
+3. Review pending drafts at `/bookings/imports/` (web) or via
+   `POST /api/v1/bookings/import/drafts/confirm/`.
+4. Confirm assigns the booking to a trip (auto-suggested by date overlap) or reject it.
+   Duplicate confirmation numbers merge into the existing booking.
+
+Paste-to-import without email still works from the trip detail page and
+`POST /api/v1/trips/{id}/bookings/import/` (saves immediately). Use the draft
+preview endpoints when you want review-before-save.
 
 ## Planning docs
 

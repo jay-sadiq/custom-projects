@@ -8,6 +8,18 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
 
     path('', views.dashboard, name='dashboard'),
+    path('bookings/imports/', views.booking_imports_inbox, name='booking_imports_inbox'),
+    path('bookings/imports/preview/', views.booking_import_preview, name='booking_import_preview'),
+    path(
+        'bookings/imports/<int:draft_id>/confirm/',
+        views.booking_import_confirm,
+        name='booking_import_confirm',
+    ),
+    path(
+        'bookings/imports/<int:draft_id>/reject/',
+        views.booking_import_reject,
+        name='booking_import_reject',
+    ),
     path('trip/create/', views.create_trip, name='create_trip'),
     path('trip/create/status/<int:job_id>/', views.trip_creation_status, name='trip_creation_status'),
     path('trip/<int:trip_id>/', views.trip_detail, name='trip_detail'),

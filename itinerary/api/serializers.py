@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from itinerary.models import (
     Booking,
+    BookingImportDraft,
     ChecklistItem,
     DayItinerary,
     StopBlock,
@@ -205,6 +206,48 @@ class StopPhotoSerializer(serializers.ModelSerializer):
 
 class BookingImportSerializer(serializers.Serializer):
     text = serializers.CharField()
+
+
+class BookingImportDraftSerializer(serializers.ModelSerializer):
+    parsed = serializers.JSONField(source="parsed_json", read_only=True)
+
+    class Meta:
+        model = BookingImportDraft
+        fields = (
+            "id",
+            "status",
+            "source",
+            "source_subject",
+            "source_from",
+            "raw_text",
+            "parsed",
+            "suggested_trip",
+            "confirmed_trip",
+            "booking",
+            "error_message",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
+
+
+class BookingImportConfirmSerializer(serializers.Serializer):
+    draft_id = serializers.IntegerField()
+    trip_id = serializers.IntegerField()
+    booking_type = serializers.CharField(required=False, allow_blank=True)
+    title = serializers.CharField(required=False, allow_blank=True)
+    confirmation_number = serializers.CharField(required=False, allow_blank=True)
+    details = serializers.CharField(required=False, allow_blank=True)
+    start_time = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    end_time = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    cost = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, allow_null=True
+    )
+
+
+class BookingImportPreviewSerializer(serializers.Serializer):
+    text = serializers.CharField()
+    trip_id = serializers.IntegerField(required=False, allow_null=True)
 
 
 class ChatEditSerializer(serializers.Serializer):

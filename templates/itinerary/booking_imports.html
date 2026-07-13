@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block title %}Booking imports{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <nav class="topnav" style="margin-bottom: 24px; border-radius: 16px; padding: 12px 24px; background: rgba(255,255,255,0.75);">
+        <a href="{% url 'dashboard' %}" class="brand" style="font-size: 1.1rem;">
+            <span>← Back to dashboard</span>
+        </a>
+        <div class="topnav-user">
+            <span class="welcome-msg"><strong>{{ request.user.username }}</strong></span>
+            <a href="{% url 'logout' %}" class="logout-btn">Logout</a>
+        </div>
+    </nav>
+
+    <h1 style="font-family: var(--font-heading); color: var(--color-crimson); margin-bottom: 8px;">
+        Booking import inbox
+    </h1>
+    <p style="color: var(--color-text-secondary); margin-bottom: 20px;">
+        Forward confirmation emails to your unique address, or paste text below. Review before saving.
+    </p>
+
+    <div style="background: white; border: 1px solid var(--color-border); border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+        <div style="font-weight: 700; margin-bottom: 6px;">Your forwarding address</div>
+        <code style="user-select: all; word-break: break-all;">{{ forwarding_address }}</code>
+        <p style="margin-top: 10px; font-size: 0.85rem; color: var(--color-text-secondary);">
+            Configure your inbound email provider to POST MIME to
+            <code>/api/v1/webhooks/inbound-email/</code> with header
+            <code>X-Webhook-Secret</code>.
+        </p>
+    </div>
+
+    <div style="background: white; border: 1px solid var(--color-border); border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+        <h2 style="font-size: 1.05rem; margin-bottom: 12px;">Paste a confirmation</h2>
+        <form
+            hx-post="{% url 'booking_import_preview' %}"
+            hx-target="#preview-result"
+            hx-swap="innerHTML"
+        >
+            {% csrf_token %}
+            <div class="form-group">
+                <label class="form-label">Optional trip hint</label>
+                <select name="trip_id" class="form-input">
+                    <option value="">Auto-match by dates</option>
+                    {% for trip in trips %}
+                    <option value="{{ trip.id }}">{{ trip.title }} ({{ trip.destination }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Confirmation text</label>
+                <textarea name="paste_text" class="form-input" rows="6" placeholder="Paste flight/hotel confirmation…" required></textarea>
+            </div>
+            <button type="submit" class="btn-nav primary">Parse for review</button>
+        </form>
+        <div id="preview-result" style="margin-top: 16px;"></div>
+    </div>
+
+    <h2 style="font-family: var(--font-heading); margin-bottom: 12px; color: var(--color-crimson);">Recent drafts</h2>
+    <div id="drafts-list">
+        {% for draft in drafts %}
+            {% include 'itinerary/partials/booking_import_draft_card.html' with draft=draft trips=trips %}
+        {% empty %}
+            <div style="background: white; border: 1px dashed var(--color-border); padding: 28px; text-align: center; border-radius: 12px;">
+                No booking imports yet.
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

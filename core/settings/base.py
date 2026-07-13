@@ -64,6 +64,13 @@ CACHES = {
 
 AI_RATE_LIMIT = os.environ.get("AI_RATE_LIMIT", "10/h")
 
+# Domain used for trips+{token}@… forwarding addresses (configure inbound MX separately).
+BOOKING_IMPORT_EMAIL_DOMAIN = os.environ.get(
+    "BOOKING_IMPORT_EMAIL_DOMAIN", "bookings.example.com"
+)
+# Optional shared secret for inbound webhook (SendGrid/Mailgun/etc.). Empty = open in DEBUG only.
+INBOUND_EMAIL_WEBHOOK_SECRET = os.environ.get("INBOUND_EMAIL_WEBHOOK_SECRET", "")
+
 ROOT_URLCONF = "core.urls"
 
 TEMPLATES = [

@@ -183,6 +183,41 @@ class TripsRepository {
     return Booking.fromJson(response.data ?? {});
   }
 
+  Future<Map<String, dynamic>> previewBookingImport({
+    required String text,
+    int? tripId,
+  }) async {
+    final payload = <String, dynamic>{'text': text};
+    if (tripId != null) {
+      payload['trip_id'] = tripId;
+    }
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/bookings/import/drafts/preview/',
+      data: payload,
+    );
+    return response.data ?? {};
+  }
+
+  Future<Map<String, dynamic>> confirmBookingImport({
+    required int draftId,
+    required int tripId,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/bookings/import/drafts/confirm/',
+      data: {
+        'draft_id': draftId,
+        'trip_id': tripId,
+      },
+    );
+    return response.data ?? {};
+  }
+
+  Future<String> fetchBookingForwardingAddress() async {
+    final response =
+        await _dio.get<Map<String, dynamic>>('/bookings/import/address/');
+    return response.data?['forwarding_address'] as String? ?? '';
+  }
+
   Future<TripCreationJob> createTrip({
     required String destination,
     required int daysCount,
