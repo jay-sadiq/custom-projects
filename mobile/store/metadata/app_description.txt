@@ -1,0 +1,14 @@
+Trip Planner — AI family trip companion
+
+Plan and follow AI-generated itineraries on your phone. Trip Planner connects to your Trip Planner account and lets you:
+
+• View trips, day-by-day schedules, and maps
+• Create new AI-planned trips
+• Edit day notes and checklist items
+• Upload photos to stops
+• Import bookings from confirmation text
+• Use cached data offline when traveling
+
+Requires a Trip Planner backend account. The web app provides full calendar editing; the mobile app is optimized for on-trip use.
+
+Privacy policy: see PRIVACY.md in the repository or the URL provided in store settings.

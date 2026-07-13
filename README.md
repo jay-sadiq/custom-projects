@@ -134,17 +134,19 @@ uv run coverage run --source=itinerary manage.py test itinerary.tests
 uv run coverage report --include='itinerary/views.py'
 ```
 
-## Mobile app (Phase 10–12)
+## Mobile app (Phase 10–13)
 
-Trip list, AI create-trip, offline cache, map, photos, weather, reviews, timeline, checklist, notes, chat edit, and booking import are in the Flutter companion.
+Trip list, offline cache, photos, and store-ready flavors are in the Flutter companion. See [`mobile/RELEASE.md`](mobile/RELEASE.md) for TestFlight and Play Console steps.
 
 ```bash
 cd mobile
 flutter pub get
-flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8000
+flutter run --flavor dev --dart-define-from-file=config/dev.json
 ```
 
-See [`mobile/README.md`](mobile/README.md) for emulator URLs, structure, and CI.
+Android emulator: add `--dart-define=API_BASE_URL=http://10.0.2.2:8000`.
+
+See [`mobile/README.md`](mobile/README.md) for flavors, structure, and CI.
 
 ## Planning docs
 

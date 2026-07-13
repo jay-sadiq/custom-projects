@@ -1,14 +1,28 @@
-/// Runtime configuration via `--dart-define`.
+import 'flavor.dart';
+
+/// Runtime configuration via `--dart-define` or `--dart-define-from-file`.
 ///
-/// Example:
-/// `flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000`
+/// Flavor files live in `mobile/config/*.json`.
 class Env {
   const Env._();
 
-  static const apiBaseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://127.0.0.1:8000',
-  );
+  static const _flavorName = String.fromEnvironment('FLAVOR', defaultValue: 'dev');
+  static const _apiBaseUrlOverride = String.fromEnvironment('API_BASE_URL');
+
+  static AppFlavor get flavor => AppFlavor.parse(_flavorName);
+
+  static String get apiBaseUrl {
+    if (_apiBaseUrlOverride.isNotEmpty) {
+      return _apiBaseUrlOverride;
+    }
+    return flavor.defaultApiBaseUrl;
+  }
 
   static const apiPrefix = '/api/v1';
+
+  static String get appName => flavor.displayName;
+
+  static String get privacyPolicyUrl => flavor.privacyPolicyUrl;
+
+  static bool get isProduction => flavor == AppFlavor.prod;
 }

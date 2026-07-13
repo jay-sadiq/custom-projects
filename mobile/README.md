@@ -5,20 +5,31 @@ Companion app for the Django trip planner API (`/api/v1/`).
 ## Prerequisites
 
 - Flutter stable SDK
-- Running Django backend (`uv run python manage.py runserver`)
+- Running Django backend for dev (`uv run python manage.py runserver`)
 
-## Run
+## Run (flavors)
 
 ```bash
 cd mobile
 flutter pub get
-flutter run \
-  --dart-define=API_BASE_URL=http://127.0.0.1:8000
+
+# Dev — local API (iOS simulator / desktop)
+flutter run --flavor dev --dart-define-from-file=config/dev.json
+
+# Android emulator → host machine Django
+flutter run --flavor dev \
+  --dart-define-from-file=config/dev.json \
+  --dart-define=API_BASE_URL=http://10.0.2.2:8000
+
+# Production API
+flutter run --flavor prod --dart-define-from-file=config/prod.json
 ```
 
-**Android emulator:** use `http://10.0.2.2:8000` instead of `127.0.0.1`.
-
-**iOS simulator:** `http://127.0.0.1:8000` works.
+| Flavor | Android app name | Can install side-by-side |
+|--------|------------------|------------------------|
+| `dev` | Trip Planner DEV | Yes (`.dev` suffix) |
+| `staging` | Trip Planner STG | Yes (`.staging` suffix) |
+| `prod` | Trip Planner | Production ID |
 
 ## Test & analyze
 
@@ -27,30 +38,29 @@ flutter analyze
 flutter test
 ```
 
+## Release builds
+
+See **[RELEASE.md](./RELEASE.md)** for TestFlight, Play Internal Testing, signing, and screenshot capture.
+
+```bash
+./scripts/build_android.sh prod   # Google Play .aab
+./scripts/build_ios.sh prod       # TestFlight .ipa (macOS)
+```
+
 ## Project structure
 
 ```
-lib/
-  config/env.dart
-  core/api/                 # Dio + JWT refresh
-  core/cache/               # Hive offline read cache
-  core/network/             # Connectivity status
-  features/auth/
-  features/trips/           # List, create, detail, map, timeline, photos
-  routing/
+lib/config/          # env.dart, flavor.dart
+config/              # dev.json, staging.json, prod.json
+assets/icon/         # launcher + splash source
+store/metadata/      # privacy policy, store copy, screenshot guide
+scripts/             # build_android.sh, build_ios.sh
 ```
 
-## Phase 11 — Core companion screens
+## Feature phases
 
-Trip list, AI create-trip, day map, stops, debounced notes, checklist toggle, and chat edit.
+- **Phase 11** — Trip list, create, map, checklist, notes, chat edit
+- **Phase 12** — Offline cache, photos, weather, reviews, timeline, booking import
+- **Phase 13** — Flavors, icons/splash, CI build, store release docs
 
-## Phase 12 — Offline, photos, parity widgets
-
-- **Offline cache** — Hive stores last-viewed trips/days/stops/checklist; orange banner when offline; edits disabled
-- **Camera upload** — `image_picker` → `POST /stops/{id}/photos/` with gallery on stop detail
-- **Weather chip** — `GET /days/{id}/weather/` in day header
-- **Reviews sheet** — `GET /stops/{id}/reviews/` from stop detail
-- **Timeline** — read-only vertical schedule sorted by `start_time_of_day`
-- **Booking import** — paste confirmation text → `POST /trips/{id}/bookings/import/`
-
-Store builds and flavors land in **Phase 13**.
+Product competitiveness features (push, collab) are in Annex C Phases 14–18.

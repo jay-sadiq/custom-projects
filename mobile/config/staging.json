@@ -1,0 +1,4 @@
+{
+  "FLAVOR": "staging",
+  "API_BASE_URL": "https://trip-planner-app-staging.fly.dev"
+}
